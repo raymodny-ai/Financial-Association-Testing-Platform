@@ -1,0 +1,240 @@
+/* ==========================================================================
+   @platform/ui · Design Tokens
+   金融关联性检验平台前端设计规划 v1 的唯一样式事实来源。
+   规则：所有页面组件必须引用本文件变量，禁止硬编码色值/字体/间距。
+   ========================================================================== */
+
+:root {
+  /* ------------------------------------------------------------------ */
+  /* 色彩系统：6 个命名色（不引入第七色；辅助灰阶由 Inkwell 降透明度派生） */
+  /* ------------------------------------------------------------------ */
+  --color-inkwell: #16233b;      /* 主文字与结构色，深墨蓝，替代纯黑 */
+  --color-draft: #f2f4f6;        /* 冷调纸白背景（刻意避开暖调奶油色） */
+  --color-ledger-teal: #0d7377;  /* 唯一强调色：主操作 / 显著性正向标记 / 选中态 */
+  --color-clear: #1e8a4c;        /* 审计低风险语义色 */
+  --color-watch: #b4530a;        /* 审计中风险语义色 */
+  --color-breach: #c0312e;       /* 审计高风险语义色 */
+
+  /* 中性派生色：全部由 Inkwell 降不透明度得到，不新增色相 */
+  --color-surface: #ffffff;                                  /* 卡片中性底 */
+  --color-text-primary: var(--color-inkwell);
+  --color-text-secondary: color-mix(in srgb, var(--color-inkwell) 68%, transparent);
+  --color-text-disabled: color-mix(in srgb, var(--color-inkwell) 40%, transparent);
+  --color-border: color-mix(in srgb, var(--color-inkwell) 16%, transparent);
+  --color-border-strong: color-mix(in srgb, var(--color-inkwell) 32%, transparent);
+
+  /* 强调色派生态（hover / 浅底） */
+  --color-ledger-teal-hover: color-mix(in srgb, var(--color-ledger-teal) 84%, var(--color-inkwell));
+  --color-ledger-teal-subtle: color-mix(in srgb, var(--color-ledger-teal) 10%, var(--color-surface));
+
+  /* 风险语义派生态：浅底用于风险卡片 / 告警条 */
+  --color-clear-subtle: color-mix(in srgb, var(--color-clear) 10%, var(--color-surface));
+  --color-watch-subtle: color-mix(in srgb, var(--color-watch) 10%, var(--color-surface));
+  --color-breach-subtle: color-mix(in srgb, var(--color-breach) 10%, var(--color-surface));
+
+  /* ------------------------------------------------------------------ */
+  /* 字体组合：Archivo（展示，克制）/ IBM Plex Sans（正文）/ IBM Plex Mono（数据） */
+  /* ------------------------------------------------------------------ */
+  --font-display: 'Archivo', 'IBM Plex Sans', system-ui, sans-serif;
+  --font-body: 'IBM Plex Sans', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  --font-data: 'IBM Plex Mono', 'Cascadia Mono', Consolas, monospace;
+
+  /* 字号阶梯（展示字体仅用于标题层，克制使用） */
+  --text-display: 28px;   /* 页面标题 */
+  --text-heading: 20px;   /* 卡片标题 / Tab 标签 */
+  --text-body: 14px;      /* 正文 / 表单 */
+  --text-caption: 12px;   /* eyebrow 小标签 / 注释 */
+  --text-data: 13px;      /* 表格数字 / 统计量 */
+
+  --line-height-tight: 1.25;
+  --line-height-body: 1.55;
+
+  /* ------------------------------------------------------------------ */
+  /* 结果页三栏栅格规格：CSS Grid 12 列（左 3 / 中 7 / 右 2）             */
+  /* ------------------------------------------------------------------ */
+  --grid-columns: 12;
+  --grid-gap: 24px;              /* 栏间距 */
+  --card-padding: 20px;          /* 卡片内边距 */
+  --rail-left-width: 280px;      /* 左栏：配置摘要 + 风险标记条（sticky） */
+  --rail-right-width: 300px;     /* 右栏：研究注释 / 导出 / 分享（可折叠） */
+  --rail-right-collapsed-width: 48px;
+  --content-min-width: 720px;    /* 中栏最小宽度 */
+
+  /* 响应式断点（仅供 JS 与文档参考，CSS 媒体查询须写字面值）：
+     ≤1280px 右栏下沉到中栏下方；≤1024px 左栏收为抽屉 */
+
+  /* ------------------------------------------------------------------ */
+  /* 签名元素：审计印章（Audit Seal）                                     */
+  /* ------------------------------------------------------------------ */
+  --seal-rotation: -3deg;        /* 双环圆形印章微旋转角 */
+
+  /* ------------------------------------------------------------------ */
+  /* 间距阶梯（4px 基准，禁止硬编码任意间距）                            */
+  /* ------------------------------------------------------------------ */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* ------------------------------------------------------------------ */
+  /* 圆角阶梯                                                            */
+  /* ------------------------------------------------------------------ */
+  --radius-sm: 4px;              /* 标签 / 小按钮 */
+  --radius-card: 8px;            /* 卡片 / 表单控件 */
+  --radius-lg: 12px;             /* 总览卡 / 弹层 */
+
+  /* ------------------------------------------------------------------ */
+  /* 阴影层级（由 Inkwell 降透明度派生，不新增色相）                     */
+  /* ------------------------------------------------------------------ */
+  --shadow-card: 0 1px 2px color-mix(in srgb, var(--color-inkwell) 8%, transparent);
+  --shadow-raised: 0 4px 12px color-mix(in srgb, var(--color-inkwell) 14%, transparent);
+  --shadow-overlay: 0 8px 28px color-mix(in srgb, var(--color-inkwell) 22%, transparent);
+
+  /* ------------------------------------------------------------------ */
+  /* 动效（须尊重 prefers-reduced-motion，见文末底线规则）               */
+  /* ------------------------------------------------------------------ */
+  --duration-fast: 120ms;        /* hover / 焦点 */
+  --duration-base: 200ms;        /* 常规过渡 */
+  --duration-seal: 600ms;        /* 审计印章盖印动画 */
+  --easing-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  /* ------------------------------------------------------------------ */
+  /* 层级（z-index 统一管理，禁止裸写数字）                              */
+  /* ------------------------------------------------------------------ */
+  --z-sticky: 10;                /* 左栏 sticky */
+  --z-drawer: 100;               /* ≤1024px 左栏抽屉 */
+  --z-overlay: 200;              /* 弹层 / Modal */
+  --z-toast: 300;                /* 全局提示 */
+
+  /* ------------------------------------------------------------------ */
+  /* 图表序列色（ECharts/D3 用；仅由 6 命名色派生，不引入第七色相）      */
+  /* ------------------------------------------------------------------ */
+  --chart-series-1: var(--color-ledger-teal);
+  --chart-series-2: var(--color-inkwell);
+  --chart-series-3: var(--color-clear);
+  --chart-series-4: var(--color-watch);
+  --chart-series-5: var(--color-breach);
+  --chart-series-6: color-mix(in srgb, var(--color-inkwell) 45%, transparent);
+
+  /* ------------------------------------------------------------------ */
+  /* 通用                                                               */
+  /* ------------------------------------------------------------------ */
+  --focus-ring: 2px solid var(--color-ledger-teal);
+}
+
+/* ==========================================================================
+   基础应用层：body 默认值与可复用工具类
+   ========================================================================== */
+
+body {
+  background-color: var(--color-draft);
+  color: var(--color-text-primary);
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  line-height: var(--line-height-body);
+}
+
+/* 展示字体：仅页面标题 / Tab 标签 / eyebrow 使用 */
+.font-display {
+  font-family: var(--font-display);
+  font-variation-settings: 'wdth' 110; /* Archivo Expanded 轴 */
+  letter-spacing: 0.01em;
+}
+
+/* 数据字体：所有统计量 / p 值 / 表格数字必须使用，保证纵向对齐 */
+.font-data,
+.data-table td {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-data);
+}
+
+/* ------------------------------------------------------------------ */
+/* 审计风险语义类：三级风险色，用于卡片 / 告警条 / 印章                    */
+/* ------------------------------------------------------------------ */
+.risk-clear {
+  color: var(--color-clear);
+  background-color: var(--color-clear-subtle);
+  border-color: var(--color-clear);
+}
+
+.risk-watch {
+  color: var(--color-watch);
+  background-color: var(--color-watch-subtle);
+  border-color: var(--color-watch);
+}
+
+.risk-breach {
+  color: var(--color-breach);
+  background-color: var(--color-breach-subtle);
+  border-color: var(--color-breach);
+}
+
+/* 高风险固定提示条：PRD 要求醒目显示、不能被折叠隐藏 */
+.risk-banner-breach {
+  color: var(--color-breach);
+  background-color: var(--color-breach-subtle);
+  border: 1px solid var(--color-breach);
+  border-left-width: 4px;
+  border-radius: var(--radius-card);
+  padding: var(--card-padding);
+}
+
+/* ------------------------------------------------------------------ */
+/* 结果页三栏布局容器                                                    */
+/* ------------------------------------------------------------------ */
+.layout-results {
+  display: grid;
+  grid-template-columns: var(--rail-left-width) minmax(var(--content-min-width), 1fr) var(--rail-right-width);
+  gap: var(--grid-gap);
+  align-items: start;
+}
+
+.layout-results > .rail-left {
+  position: sticky;
+  top: var(--grid-gap);
+}
+
+.layout-results > .rail-right.is-collapsed {
+  width: var(--rail-right-collapsed-width);
+}
+
+/* ≤1280px：右栏下沉到中栏下方 */
+@media (max-width: 1280px) {
+  .layout-results {
+    grid-template-columns: var(--rail-left-width) minmax(0, 1fr);
+  }
+  .layout-results > .rail-right {
+    grid-column: 2;
+  }
+}
+
+/* ≤1024px：左栏收为抽屉（由 JS 控制 .rail-left 的显隐与定位） */
+@media (max-width: 1024px) {
+  .layout-results {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* 无障碍与动效底线                                                      */
+/* ------------------------------------------------------------------ */
+:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

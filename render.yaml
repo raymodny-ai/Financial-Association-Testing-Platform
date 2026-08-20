@@ -1,0 +1,50 @@
+# Render Blueprint（T20 首部署）
+#
+# 拓扑定案：单一 web 服务同时托管 API 与前端静态产物（同源）。
+# 原因：G5 匿名工作区 Cookie 为 SameSite=Lax httpOnly，独立静态站会形成
+# 跨站第三方 Cookie，被现代浏览器拦截；同源部署同时免除 CORS 配置。
+#
+# 构建链：pnpm（版本经根 package.json packageManager 字段锁定，corepack 激活）
+#   → @platform/web vite 产物 → @platform/api tsup 产物（生产不依赖 tsx）。
+# 启动链：node dist/infrastructure/migrate.js（幂等迁移）→ node dist/index.js。
+services:
+  - type: web
+    name: fap-platform
+    runtime: node
+    plan: free
+    # 构建在仓库根执行（pnpm workspace 需要）
+    buildCommand: >-
+      corepack enable &&
+      pnpm install --frozen-lockfile &&
+      pnpm --filter @platform/web build &&
+      pnpm --filter @platform/api build
+    # 迁移与服务均在 services/api 下运行；prompts/ 与 infra/db/migrations
+    # 为运行时资产，经模块向上寻路解析，故无需复制进 dist
+    startCommand: >-
+      cd services/api &&
+      node dist/infrastructure/migrate.js &&
+      node dist/index.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: fap-db
+          property: connectionString
+      # 相对 services/api 的 cwd 解析（见 presentation/static.ts）
+      - key: WEB_DIST_DIR
+        value: ../../apps/web/dist
+      # LLM 密钥（可选：缺失时 LLM 步骤降级 skipped，不阻塞统计结果）
+      - key: DASHSCOPE_API_KEY
+        sync: false
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      # 同源部署无需 CORS_ALLOWED_ORIGINS；如日后拆分前后端再启用
+      # - key: CORS_ALLOWED_ORIGINS
+      #   sync: false
+
+databases:
+  - name: fap-db
+    databaseName: fap
+    plan: free

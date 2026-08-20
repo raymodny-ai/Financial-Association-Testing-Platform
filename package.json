@@ -1,0 +1,27 @@
+{
+  "name": "financial-association-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Financial Association Testing Platform - 金融关联性检验平台 monorepo",
+  "packageManager": "pnpm@11.22.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @platform/web --if-present dev",
+    "build": "pnpm -r --if-present build",
+    "build:web": "pnpm --filter @platform/web --if-present build",
+    "lint": "eslint . --cache",
+    "test": "pnpm -r --if-present test",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "db:start": "powershell -ExecutionPolicy Bypass -File infra/db/start-postgres.ps1",
+    "db:stop": "powershell -ExecutionPolicy Bypass -File infra/db/stop-postgres.ps1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "eslint": "^9.39.2",
+    "prettier": "^3.7.4",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.50.1"
+  }
+}

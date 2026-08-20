@@ -1,0 +1,21 @@
+{
+  "name": "@platform/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "金融关联性检验平台共享工具：错误类型 / 常量 / 通用函数",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

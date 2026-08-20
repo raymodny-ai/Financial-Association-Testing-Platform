@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "platform://prompts/output_schema/v1",
+  "title": "LLM 研究解释结构化输出",
+  "description": "与 @platform/schemas 的 llmOutputSchema（10 字段）严格对应。模型必须输出且仅输出符合本 schema 的 JSON 对象。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "executive_conclusion",
+    "statistical_interpretation",
+    "stability_assessment",
+    "data_quality_caveats",
+    "market_meaning",
+    "next_research_steps",
+    "monitoring_suggestions",
+    "strategy_risk_notes",
+    "confidence_level",
+    "forbidden_inference_flags"
+  ],
+  "properties": {
+    "executive_conclusion": {
+      "type": "string",
+      "minLength": 1,
+      "description": "研究结论摘要（若审计存在高风险，必须在本字段前部突出提示）"
+    },
+    "statistical_interpretation": {
+      "type": "string",
+      "minLength": 1,
+      "description": "统计解释：区分统计显著性、效应强度；效应弱而 p 显著时必须说明'统计显著不等于经济显著'"
+    },
+    "stability_assessment": {
+      "type": "string",
+      "minLength": 1,
+      "description": "稳健性评估：结合滚动窗口与滞后分析；仅少数窗口显著时不得描述为'稳定规律'"
+    },
+    "data_quality_caveats": {
+      "type": "string",
+      "description": "数据质量与双源一致性风险提示；审计高风险时必须给出补充验证建议"
+    },
+    "market_meaning": {
+      "type": "string",
+      "description": "市场含义（克制表述，不得输出确定性投资建议）"
+    },
+    "next_research_steps": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "研究流程下一步建议"
+    },
+    "monitoring_suggestions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "需持续监控的指标与触发条件"
+    },
+    "strategy_risk_notes": {
+      "type": "string",
+      "description": "策略风险备注（禁止确定性表述）"
+    },
+    "confidence_level": {
+      "type": "string",
+      "enum": ["high", "medium", "low"],
+      "description": "置信级别；审计高风险时必须降为 low 或 medium"
+    },
+    "forbidden_inference_flags": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "禁止性推断段落：当前结果不能支持的推断（含未检验的因果断言）"
+    }
+  }
+}

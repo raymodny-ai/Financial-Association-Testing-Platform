@@ -1,0 +1,94 @@
+# 组件图：核心公开接口（T18 后刷新）
+
+analysis-engine: "services/analysis-engine/src" {
+  index: "index.ts 包入口（导出全部公开接口）"
+
+  transform: "applyTransform(values, kind)\nkind: pct_return | log_return | diff\n首点丢弃；收益率要求全正值"
+  align: "alignSeries(seriesList) → AlignedPanel\n日期交集、升序、重复日期拒绝"
+  binning: {
+    quantileLinear: "quantileLinear(values, q)\nnumpy linear 等价"
+    fitBinning: "fitBinning(referenceValues, config)\n观测数<箱数/零跨度抛错"
+    assignBins: "assignBins(values, fitted)\nvalue ≤ 阈值归下箱"
+  }
+  pipeline: "prepareDataset({series, derivedSeries, periods, binning})\n→ PreparedDataset{aliases, dates, values, referenceIndex, testIndex, categories, binning}"
+  chi2: "chi2sf(statistic, df)\njstat CDF 包装，对偶数 df 闭式解验证 1e-9"
+  chi-square: {
+    independence: "chiSquareIndependence(observed)\nscipy correction=False 语义"
+    gof: "chiSquareGoodnessOfFit(observed, probabilities)\ncramersV=null"
+    homogeneity: "chiSquareHomogeneity(countsA, countsB) → 2×k 表"
+    result: "ChiSquareResult{statistic, degreesOfFreedom, pValue, cramersV, expectedFrequencies, applicability}"
+  }
+  chi-square-dataset: "pairwiseChiSquare(dataset)\n固定箱空间列联表 + 零边际剪枝(notes)"
+  student-t: "studentTSf(t, df)\ndf≤2 闭式解，df≥3 jstat"
+  correlation: "pearsonTest(x,y) / spearmanTest(x,y)\n→ {r, statistic(t), degreesOfFreedom, pValue, n}"
+  mutual-information: "mutualInformationFromCounts / estimateMutualInformation / permutationMiTest（mulberry32 播种）"
+  continuous-registry: "register/get/listContinuousMethod\n内置 pearson/spearman/mutual_information"
+  correction: "adjustPValues(pValues, method)\nbonferroni/bh/by/none，statsmodels 语义\ncorrectAndMark(pValues, method, alpha)\n→ {adjusted, significant}"
+  rolling: "planWindows(n, {windowSize, stepSize, minSamples})\nrollingWindowTests(dataset, options)\n→ {rows, skipped}：χ²/pearson/spearman/MI 滚动重算"
+  audit: "auditSeries({alias, points, thresholds, adjustedPoints?, dualSource?})\n→ {row(auditRow 9字段), notes[], homogeneity|null}\n跳点=阈值主规则+MAD 兜底；双源=三分箱一致率+同质性 χ²"
+  llm-context: "buildLlmContext({config, researchQuestion?, results, rollingSkippedCount?, audit, auditNotes?})\n→ LlmContext（llmContextSchema 校验）\n行分区：window_end 非空=滚动、lag>0=滞后、其余=全样本"
+  types: "NumericSeries / AlignedPanel"
+
+  pipeline -> transform
+  pipeline -> align
+  pipeline -> binning
+  chi-square -> chi2
+  chi-square-dataset -> chi-square
+  correlation -> student-t
+  mutual-information -> binning
+  continuous-registry -> correlation
+  continuous-registry -> mutual-information
+  rolling -> chi-square-dataset: "countContingency / pruneZeroMargins 共享接缝"
+  rolling -> correlation
+  rolling -> mutual-information
+  audit -> chi-square: "双源同质性 chiSquareHomogeneity"
+  audit -> binning: "quantileLinear 三分箱阈值"
+}
+
+analysis-engine.llm-context -> packages.schemas: "消费 TaskConfig/ResultTable/AuditTable，输出经 llmContextSchema 校验"
+packages.schemas: "packages/schemas\nZod 契约唯一来源"
+
+api-data-flow: "services/api 数据链路" {
+  provider: "DataProvider.fetchHistory(ticker, {start,end,frequency})\n→ HistoryPanel{points, source, source_version, fetched_at}"
+  registry: "provider-registry：registerProvider / getProvider"
+  yahoo: "yahoo-adapter（主力，限速≥1s + 24h 缓存）"
+  stooq: "stooq-adapter（休眠保留）"
+  files: "files 路由：CSV 文本上传 → uploaded_files"
+  tasks: "tasks 路由：任务 CRUD + workspace 注入"
+  prompt-renderer: "renderPrompt(template, context)\n{{placeholder}} ← LlmContext 12 字段；未知占位符抛错"
+  llm-service: "runLlmInterpretation(options) → {output|null, trace}\n90s 超时/重试一次/剔围栏/schema 校验；skipped 降级永不抛错"
+  llm-http: "openAiCompatibleClient.complete(request)\nchat/completions + response_format=json_object；AbortError→LlmTimeoutError"
+  llm-runner: "interpretContext(context, model, runId?)\n装配 prompt-assets + llm-config + llm-http + llm-service"
+  security: "T18 安全基线：requestIdMiddleware（x-request-id 透传）\nrateLimiter({windowMs,max}) 固定窗口 429+Retry-After\ncorsMiddleware(白名单+凭据，OPTIONS→204)\nassertUuidParam 非法 UUID→404"
+  logger: "createLogger(sink?) JSON 行日志 + requestLogger（不落 Cookie）"
+
+  yahoo -> registry: "副作用注册"
+  stooq -> registry: "副作用注册"
+  llm-runner -> llm-service
+  llm-runner -> llm-http
+  llm-service -> prompt-renderer
+}
+
+api-analysis-flow: "services/api 任务运行编排（T17-A）" {
+  runner: "runAnalysis(config, deps) → AnalysisOutcome{runId, results, audit, llm}\n数据加载 → prepareDataset → 卡方族+连续三法 → 校正分批 → 滚动 → 每源审计 → buildLlmContext → interpret"
+  deps: "RunnerDeps DI：fetchHistory / readFileContent（工作区作用域）/ interpret"
+  repos: "resultRepository/auditRepository.replaceForTask（同事务 DELETE+INSERT）\nllmArtifactRepository.save（ON CONFLICT(task_id)）"
+  routes: "POST /tasks/:id/run（running→409，失败回写 failed）\nGET /tasks/:id/results（task+results+audit+llm）"
+
+  routes -> runner
+  runner -> repos: "产出持久化"
+  runner -> deps
+}
+
+web-flow: "apps/web 核心工作流（T17-B）" {
+  home: "HomePage：五步向导 → taskConfigSchema.safeParse → createTask → runTask → /results/:id"
+  results: "ResultsPage：getTaskResults → 风险固定条(.risk-banner-breach) + 检验 Tab + LLM 并排(.llm-split) + 客户端导出"
+  history: "HistoryPage：listTasks + 重跑 mutation"
+  api-client: "lib/api.ts：fetch credentials:'include'，出参一律 Zod 校验"
+
+  home -> api-client
+  results -> api-client
+  history -> api-client
+}
+
+web-flow.api-client -> api-data-flow.tasks: "HTTP /api（开发经 Vite 代理 :8787）"

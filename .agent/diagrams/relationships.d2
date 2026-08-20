@@ -1,0 +1,18 @@
+# 模块依赖关系图（从当前 import 结构派生，T11 后刷新）
+
+apps/web -> packages/ui: "设计 Token"
+apps/web -> services/api: "HTTP /api（Cookie 工作区）"
+
+services/api -> packages/schemas: "入参/出参双向 Zod 校验"
+services/api -> packages/shared: "AppError / DataAdapterError"
+services/api -> infra/db: "迁移 SQL（migrate.ts 运行器）"
+services/api.infrastructure -> services/api.domain: "适配器经 registerProvider 插件注册"
+services/api.presentation -> services/api.domain: "路由消费契约与注册表"
+
+services/analysis-engine -> packages/schemas: "BinningConfig / DerivedSeries / PeriodSplit 类型"
+services/analysis-engine -> jstat: "仅分布函数：卡方 CDF + t CDF（ADR 001；t df≤2 走闭式解）"
+services/analysis-engine -> fixtures: "黄金基准对拍（仅测试期）"
+
+# 计划中（T12~T16）
+services/api -> services/analysis-engine: "T12+ 任务执行器调用 prepareDataset/检验族" {style.stroke-dash: 3}
+services/api -> prompts: "T15/T16 LLM 上下文构造" {style.stroke-dash: 3}

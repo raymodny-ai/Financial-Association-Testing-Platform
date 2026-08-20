@@ -1,0 +1,161 @@
+/* ==========================================================================
+   apps/web · 页面级补充样式
+   规则：所有色值 / 字体 / 间距 / 圆角 / 阴影一律引用 @platform/ui tokens.css 变量，
+   禁止硬编码（设计 Token 唯一来源约束）。
+   ========================================================================== */
+
+/* 页面标题（展示字体由 .font-display 提供） */
+.page-title {
+  font-size: var(--text-display);
+  line-height: var(--line-height-tight);
+  margin-bottom: var(--space-6);
+}
+
+/* ------------------------------------------------------------------ */
+/* 新建分析向导                                                        */
+/* ------------------------------------------------------------------ */
+.wizard-body {
+  margin-top: var(--space-6);
+}
+
+.wizard-footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: var(--space-6);
+}
+
+/* 数据源条目卡片 */
+.source-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: var(--space-4);
+  background: var(--color-surface);
+}
+
+.source-card + .source-card {
+  margin-top: var(--space-3);
+}
+
+.source-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.source-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-3);
+}
+
+.field-label {
+  display: block;
+  color: var(--color-text-secondary);
+  font-size: var(--text-caption);
+  margin-bottom: var(--space-1);
+}
+
+/* ------------------------------------------------------------------ */
+/* 结果页左 / 右栏卡片                                                 */
+/* ------------------------------------------------------------------ */
+.rail-card {
+  background: var(--color-surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: var(--card-padding);
+}
+
+.rail-card + .rail-card {
+  margin-top: var(--space-4);
+}
+
+.rail-card-title {
+  font-family: var(--font-display);
+  font-size: var(--text-heading);
+  line-height: var(--line-height-tight);
+  margin: 0 0 var(--space-3);
+}
+
+/* 配置摘要 */
+.config-summary {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.config-summary .config-summary-label {
+  color: var(--color-text-secondary);
+  font-size: var(--text-caption);
+}
+
+.config-summary .config-summary-value {
+  font-size: var(--text-body);
+  word-break: break-all;
+}
+
+/* 风险标记条：三级风险小签（语义色来自 .risk-clear/.risk-watch/.risk-breach） */
+.risk-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.risk-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-caption);
+}
+
+/* ------------------------------------------------------------------ */
+/* 结果页中栏                                                          */
+/* ------------------------------------------------------------------ */
+/* 高风险固定提示条（tokens.css .risk-banner-breach）与栅格的垂直节奏 */
+.results-banner {
+  margin-bottom: var(--space-6);
+}
+
+.overview-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-4);
+}
+
+/* LLM 结论与统计原始结果并排（PRD 可解释性要求；窄屏下沉为单列） */
+.llm-split {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--grid-gap);
+  align-items: start;
+}
+
+@media (max-width: 1280px) {
+  .llm-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.llm-section + .llm-section {
+  margin-top: var(--space-4);
+}
+
+.llm-section-label {
+  color: var(--color-text-secondary);
+  font-size: var(--text-caption);
+  margin-bottom: var(--space-1);
+}
+
+.llm-trace {
+  margin-top: var(--space-4);
+  color: var(--color-text-secondary);
+  font-size: var(--text-caption);
+}
+
+/* 导出按钮组 */
+.export-buttons {
+  display: grid;
+  gap: var(--space-2);
+}

@@ -1,0 +1,50 @@
+# 模块图（从当前代码结构派生，T20 后刷新）
+
+packages: {
+  schemas: "packages/schemas\nZod 契约唯一来源"
+  shared: "packages/shared\nAppError 族"
+  ui: "packages/ui\n设计 Token（tokens.ts/css）"
+}
+
+services: {
+  api: "services/api\nExpress 5 网关" {
+    presentation: "routes(tasks 含 run/results、files) + middleware(workspace/error-handler/security：helmet+限流+CORS+请求ID+UUID防护) + static(T20 同源托管 web 产物 + SPA 回退，WEB_DIST_DIR 可关)"
+    domain: "DataProvider 契约 + provider-registry + analysis-runner 任务运行编排 + prompt-renderer + llm-service 编排"
+    infrastructure: "adapters(yahoo/stooq/csv-parse/llm-http) + repositories(task/file/result/llm_artifacts) + migrate/db + llm-config/prompt-assets/llm-runner + logger(JSON 行结构化日志)"
+  }
+  analysis-engine: "services/analysis-engine\n纯函数分析引擎" {
+    transform: "派生变换 pct/log/diff"
+    align: "日期交集对齐"
+    binning: "分箱 fit/assign + quantileLinear"
+    pipeline: "prepareDataset 编排"
+    chi2: "chi2sf（jstat 卡方 CDF 包装）"
+    chi-square: "独立性/拟合优度/同质性三检验 + 适用性报告"
+    chi-square-dataset: "pairwiseChiSquare：PreparedDataset → 列联表编排"
+    student-t: "studentTSf（df≤2 闭式解 / df≥3 jstat）"
+    correlation: "pearsonTest / spearmanTest（平均秩）"
+    mutual-information: "MI 定义式 + 等频分箱估计 + 播种置换检验"
+    continuous-registry: "可插拔注册表（pearson/spearman/mutual_information）"
+    correction: "多重检验校正 bonferroni/bh/by + correctAndMark"
+    rolling: "planWindows 调度 + rollingWindowTests 四法滚动重算（退化记 skipped）"
+    audit: "auditSeries 六类审计 + 双源对账 + pass/warn/fail 判定"
+    llm-context: "buildLlmContext：TaskConfig+ResultTable+AuditTable → LlmContext 12 字段摘要 + 安全约束旗标"
+  }
+}
+
+apps: {
+  web: "apps/web\nReact + Vite + AntD" {
+    home: "HomePage 新建分析向导（五步 Steps，safeParse 校验）"
+    results: "ResultsPage 三栏结果页（.layout-results + 风险固定条 + Tab 区 + 导出）"
+    history: "HistoryPage 任务列表（状态标签 + 重跑）"
+    lib: "lib/api.ts fetch 封装（credentials:'include' + Zod 出参校验） + lib/export.ts 客户端导出"
+  }
+}
+
+infra: {
+  db: "infra/db\n迁移 SQL + 本地 PostgreSQL 启停脚本"
+  deploy: "render.yaml + docs/DEPLOY.md + .github/workflows/ci.yml\nT20 Render Blueprint 同源单服务 + free PG + GitHub Actions CI"
+}
+
+prompts: "prompts/\nLLM 模板 + output_schema.json（T16 loadPromptAssets 消费）"
+fixtures: "tests/fixtures/stat-reference.json\n黄金基准集（容差 1e-9）"
+jstat: "jstat@1.9.6（npm）\n仅用分布函数，本地 jstat.d.ts 最小类型声明"

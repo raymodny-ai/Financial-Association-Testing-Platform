@@ -1,0 +1,37 @@
+{
+  "name": "@platform/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "金融关联性检验平台 API 网关与任务编排服务",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "start:tsx": "tsx src/index.ts",
+    "db:migrate": "tsx src/infrastructure/migrate.ts",
+    "db:migrate:prod": "node dist/infrastructure/migrate.js",
+    "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@platform/analysis-engine": "workspace:*",
+    "@platform/schemas": "workspace:*",
+    "@platform/shared": "workspace:*",
+    "express": "^5.1.0",
+    "helmet": "^8.3.0",
+    "pg": "^8.23.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.1",
+    "@types/node": "^22.15.0",
+    "@types/pg": "^8.23.1",
+    "@types/supertest": "^6.0.3",
+    "supertest": "^7.1.0",
+    "tsup": "^8.5.1",
+    "tsx": "^4.19.4",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

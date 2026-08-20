@@ -1,0 +1,30 @@
+{
+  "version": "v1",
+  "description": "提示词资产清单与调用约束。llm_trace.json 必须记录本版本号（可复现性要求）。",
+  "files": {
+    "system": "system_prompt.txt",
+    "userTemplate": "user_prompt_template.txt",
+    "outputSchema": "output_schema.json"
+  },
+  "providers": ["qwen", "deepseek"],
+  "defaultModel": "qwen-plus",
+  "constraints": {
+    "timeoutMs": 90000,
+    "retryOnFailure": true,
+    "blockStatsPersistenceOnFailure": false
+  },
+  "templatePlaceholders": [
+    "research_question",
+    "research_scope",
+    "sample_info",
+    "variable_definitions",
+    "categorical_key_findings",
+    "continuous_key_findings",
+    "rolling_key_findings",
+    "lag_key_findings",
+    "audit_key_findings",
+    "global_confidence_flags",
+    "required_answer_sections",
+    "forbidden_claims"
+  ]
+}

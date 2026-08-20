@@ -1,0 +1,167 @@
+/**
+ * @platform/schemas · 任务配置契约（前端模板字段，PRD「配置设计」节）
+ *
+ * TaskConfig 是前端「保存模板 / 复制分析 / 重新运行同配置」的持久化单元，
+ * 也是 api_gateway 创建任务时的入参校验契约。
+ * 附加 workspaceId（G5 决策：MVP 匿名工作区归属）。
+ */
+import { z } from 'zod';
+import {
+  binningMethodSchema,
+  correctionMethodSchema,
+  dateSchema,
+  DEFAULTS,
+  frequencySchema,
+  idSchema,
+} from './common';
+
+/** 数据源条目：ticker 拉取或 CSV 上传映射 */
+export const dataSourceSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('ticker'),
+    /** 序列别名（面板内唯一） */
+    alias: z.string().min(1).max(64),
+    /** 公开市场代码（MVP 主力源 Stooq） */
+    ticker: z.string().min(1).max(32),
+    /** 数据源标识，用于审计与可复现性 */
+    provider: z.string().min(1),
+  }),
+  z.object({
+    kind: z.literal('upload'),
+    alias: z.string().min(1).max(64),
+    /** 上传文件引用 id */
+    fileId: idSchema,
+    /** 字段映射：标准列名 → 文件列名（至少一组） */
+    columnMapping: z
+      .record(z.string(), z.string())
+      .refine((m) => Object.keys(m).length > 0, '字段映射不得为空'),
+  }),
+]);
+export type DataSource = z.infer<typeof dataSourceSchema>;
+
+/** 派生序列定义（如收益率、差分） */
+export const derivedSeriesSchema = z.object({
+  alias: z.string().min(1).max(64),
+  /** 基础序列别名 */
+  sourceAlias: z.string().min(1).max(64),
+  transform: z.enum(['pct_return', 'log_return', 'diff']),
+});
+export type DerivedSeries = z.infer<typeof derivedSeriesSchema>;
+
+/** 参考期 / 检验期划分（阈值在参考期固定、检验期复用） */
+export const periodSplitSchema = z.object({
+  referenceStart: dateSchema,
+  referenceEnd: dateSchema,
+  testStart: dateSchema,
+  testEnd: dateSchema,
+});
+export type PeriodSplit = z.infer<typeof periodSplitSchema>;
+
+/** 分箱配置 */
+export const binningConfigSchema = z.object({
+  method: binningMethodSchema.default('quantile'),
+  /** 分位数分箱的桶数（默认三分） */
+  bins: z.number().int().min(2).max(10).default(DEFAULTS.binningBins),
+  /** 分类标签（与桶数等长） */
+  labels: z.array(z.string().min(1)).optional(),
+});
+export type BinningConfig = z.infer<typeof binningConfigSchema>;
+
+/** 滚动窗口配置 */
+export const rollingConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  windowDays: z.number().int().min(30).default(DEFAULTS.rollingWindowDays),
+  stepDays: z.number().int().min(1).default(DEFAULTS.rollingStepDays),
+});
+export type RollingConfig = z.infer<typeof rollingConfigSchema>;
+
+/** 统计检验选项 */
+export const testOptionsSchema = z.object({
+  alpha: z.number().gt(0).lt(1).default(DEFAULTS.alpha),
+  correction: correctionMethodSchema.default('bh'),
+  /** 置换检验重复次数（固定种子保证可复现） */
+  permutations: z.number().int().min(100).max(100000).default(1000),
+  permutationSeed: z.number().int().default(20260819),
+});
+export type TestOptions = z.infer<typeof testOptionsSchema>;
+
+/** 审计阈值 */
+export const auditThresholdsSchema = z.object({
+  /** 缺失占比超过该值即 warn */
+  missingRatioWarn: z.number().gte(0).lte(1).default(0.02),
+  /** 缺失占比超过该值即 fail */
+  missingRatioFail: z.number().gte(0).lte(1).default(0.1),
+  /** 单日绝对收益率（%）跳点阈值 */
+  jumpAbsReturnPct: z.number().gt(0).default(20),
+  /** 双源一致率低于该值即 warn */
+  sourceMatchRatioWarn: z.number().gte(0).lte(1).default(0.98),
+});
+export type AuditThresholds = z.infer<typeof auditThresholdsSchema>;
+
+/** 任务配置（分析模板） */
+export const taskConfigSchema = z
+  .object({
+    /** 项目名称 */
+    projectName: z.string().min(1).max(128),
+    /** 归属工作区（G5：匿名工作区 id） */
+    workspaceId: idSchema,
+    /** 数据源配置 */
+    dataSources: z.array(dataSourceSchema).min(2),
+    /** 时间范围 */
+    startDate: dateSchema,
+    endDate: dateSchema,
+    /** 频率 */
+    frequency: frequencySchema.default('daily'),
+    /** 派生序列定义 */
+    derivedSeries: z.array(derivedSeriesSchema).default([]),
+    /** 参考期 / 检验期 */
+    periods: periodSplitSchema,
+    /** 分箱方法 */
+    binning: binningConfigSchema.default({}),
+    /** 统计检验选项 */
+    tests: testOptionsSchema.default({}),
+    /** 滚动窗口与步长 */
+    rolling: rollingConfigSchema.default({}),
+    /** 最大滞后 */
+    maxLag: z.number().int().min(0).max(60).default(DEFAULTS.maxLag),
+    /** 审计阈值 */
+    audit: auditThresholdsSchema.default({}),
+    /** LLM 模型名 */
+    llmModel: z.string().min(1).default('qwen-plus'),
+    /** prompt 模板版本（可复现性要求） */
+    promptVersion: z.string().min(1).default('v1'),
+  })
+  .refine((cfg) => cfg.periods.referenceEnd < cfg.periods.testStart, {
+    message: '参考期结束日期必须早于检验期开始日期',
+    path: ['periods', 'referenceEnd'],
+  })
+  .refine((cfg) => cfg.startDate <= cfg.periods.referenceStart, {
+    message: '样本起始日期不得晚于参考期起始日期',
+    path: ['startDate'],
+  })
+  .refine((cfg) => cfg.periods.testEnd <= cfg.endDate, {
+    message: '检验期结束日期不得晚于样本结束日期',
+    path: ['periods', 'testEnd'],
+  });
+export type TaskConfig = z.infer<typeof taskConfigSchema>;
+
+/** 创建任务请求（api_gateway POST /api/tasks 入参） */
+export const createTaskRequestSchema = taskConfigSchema;
+export type CreateTaskRequest = z.infer<typeof createTaskRequestSchema>;
+
+/** 任务运行状态 */
+export const taskStatusSchema = z.enum(['queued', 'running', 'completed', 'failed']);
+export type TaskStatus = z.infer<typeof taskStatusSchema>;
+
+/** 任务记录（存储层返回结构） */
+export const taskRecordSchema = z.object({
+  id: idSchema,
+  workspaceId: idSchema,
+  status: taskStatusSchema,
+  config: taskConfigSchema,
+  createdAt: z.string().datetime({ offset: true }),
+  updatedAt: z.string().datetime({ offset: true }),
+  /** 失败原因（status=failed 时） */
+  errorMessage: z.string().nullable().default(null),
+});
+export type TaskRecord = z.infer<typeof taskRecordSchema>;

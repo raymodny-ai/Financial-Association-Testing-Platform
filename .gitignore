@@ -1,0 +1,22 @@
+# 依赖
+node_modules/
+
+# 构建产物
+dist/
+build/
+coverage/
+
+# 环境与密钥（Render 密钥以 sync:false 管理，严禁入库）
+.env
+.env.*
+!.env.example
+
+# 编辑器与工具缓存
+.vscode/
+.idea/
+.eslintcache
+*.log
+
+# 系统文件
+.DS_Store
+Thumbs.db
