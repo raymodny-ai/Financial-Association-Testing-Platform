@@ -159,3 +159,47 @@
   display: grid;
   gap: var(--space-2);
 }
+
+/* ------------------------------------------------------------------ */
+/* 滞后分析双视图（PRD 模块 H：曲线图 + 表格）                        */
+/* ------------------------------------------------------------------ */
+.lag-chart {
+  margin-bottom: var(--space-4);
+}
+
+.lag-chart-tick {
+  fill: var(--color-text-secondary);
+  font-family: var(--font-data);
+  font-size: var(--text-caption);
+}
+
+.lag-chart-axis {
+  fill: var(--color-text-secondary);
+  font-size: var(--text-caption);
+}
+
+.lag-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+  font-size: var(--text-caption);
+  color: var(--color-text-secondary);
+}
+
+.lag-chart-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.lag-chart-legend-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-sm);
+}
+
+.lag-table {
+  margin-top: var(--space-2);
+}

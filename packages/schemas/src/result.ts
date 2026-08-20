@@ -19,8 +19,8 @@ export const resultRowSchema = z.object({
   right_series: z.string().min(1),
   /** 滚动窗口结束日期（全样本检验为 null） */
   window_end: dateSchema.nullable(),
-  /** 滞后期（0 表示无滞后） */
-  lag: z.number().int().min(0),
+  /** 滞后期（0 同期；正：左变量领先；负：左变量滞后，PRD 模块 H） */
+  lag: z.number().int().min(-60).max(60),
   /** 检验统计量 */
   stat_value: z.number(),
   /** 原始 p 值 */

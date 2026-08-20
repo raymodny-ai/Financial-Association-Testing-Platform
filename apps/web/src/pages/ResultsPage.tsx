@@ -6,6 +6,7 @@ import type { ColumnsType } from 'antd/es/table';
 import type { AuditRow, LlmOutput, ResultRow } from '@platform/schemas';
 import { getTaskResults } from '../lib/api';
 import { downloadCsv, downloadJson } from '../lib/export';
+import LagCurveChart from '../components/LagCurveChart';
 
 /** 审计状态 → tokens.css 三级风险语义类（pass=clear / warn=watch / fail=breach） */
 const AUDIT_RISK_CLASS: Record<AuditRow['audit_status'], string> = {
@@ -76,10 +77,11 @@ export default function ResultsPage() {
   const partitions = useMemo(() => {
     const results = data?.results ?? [];
     return {
-      categorical: results.filter((r) => r.test_family === 'categorical' && r.window_end === null && r.lag === 0),
-      continuous: results.filter((r) => r.test_family === 'continuous' && r.window_end === null && r.lag === 0),
+      categorical: results.filter((r) => r.test_family === 'categorical' && r.window_end === null),
+      continuous: results.filter((r) => r.test_family === 'continuous' && r.window_end === null && r.test_name !== 'pearson_lag'),
       rolling: results.filter((r) => r.window_end !== null),
-      lag: results.filter((r) => r.lag > 0 && r.window_end === null),
+      // 滞后行（PRD 模块 H）：pearson_lag 全扫描（含负 lag 与 lag=0）
+      lag: results.filter((r) => r.test_name === 'pearson_lag' && r.window_end === null),
     };
   }, [data]);
 
@@ -195,16 +197,25 @@ export default function ResultsPage() {
       label: `滞后分析（${partitions.lag.length}）`,
       children:
         partitions.lag.length === 0 ? (
-          <Empty description="滞后分析引擎尚未实现（缺口 N13），当前不产出滞后行" />
+          <Empty description="未启用滞后扫描（任务配置 maxLag=0）；新建分析时设置最大滞后期即可产出" />
         ) : (
-          <Table<ResultRow>
-            className="data-table"
-            size="small"
-            rowKey={(r) => `${r.test_name}-${r.left_series}-${r.right_series}-${r.lag}`}
-            columns={resultColumns([{ title: '滞后期', dataIndex: 'lag', width: 90, align: 'right' }])}
-            dataSource={partitions.lag}
-            pagination={false}
-          />
+          <>
+            {/* PRD 模块 H 双视图：曲线图 + 表格 */}
+            <LagCurveChart rows={partitions.lag} />
+            <Table<ResultRow>
+              className="data-table lag-table"
+              size="small"
+              rowKey={(r) => `${r.test_name}-${r.left_series}-${r.right_series}-${r.lag}`}
+              columns={resultColumns([{ title: '滞后期', dataIndex: 'lag', width: 90, align: 'right' }])}
+              dataSource={[...partitions.lag].sort(
+                (a, b) =>
+                  `${a.left_series}×${a.right_series}`.localeCompare(`${b.left_series}×${b.right_series}`) ||
+                  a.lag - b.lag,
+              )}
+              pagination={false}
+              scroll={{ y: 480 }}
+            />
+          </>
         ),
     },
     {

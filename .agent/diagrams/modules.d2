@@ -26,6 +26,7 @@ services: {
     continuous-registry: "可插拔注册表（pearson/spearman/mutual_information）"
     correction: "多重检验校正 bonferroni/bh/by + correctAndMark"
     rolling: "planWindows 调度 + rollingWindowTests 四法滚动重算（退化记 skipped）"
+    lag: "lagScan：[-maxLag,+maxLag] 全整数滞后 Pearson 扫描（PRD 模块 H）"
     audit: "auditSeries 六类审计 + 双源对账 + pass/warn/fail 判定"
     llm-context: "buildLlmContext：TaskConfig+ResultTable+AuditTable → LlmContext 12 字段摘要 + 安全约束旗标"
   }
@@ -35,13 +36,14 @@ apps: {
   web: "apps/web\nReact + Vite + AntD" {
     home: "HomePage 新建分析向导（五步 Steps，safeParse 校验）"
     results: "ResultsPage 三栏结果页（.layout-results + 风险固定条 + Tab 区 + 导出）"
+    lag-chart: "LagCurveChart 零依赖 SVG 滞后曲线图（与表格双视图，PRD 模块 H）"
     history: "HistoryPage 任务列表（状态标签 + 重跑）"
     lib: "lib/api.ts fetch 封装（credentials:'include' + Zod 出参校验） + lib/export.ts 客户端导出"
   }
 }
 
 infra: {
-  db: "infra/db\n迁移 SQL + 本地 PostgreSQL 启停脚本"
+  db: "infra/db\n迁移 SQL（004 含 lag ±60）+ 本地 PostgreSQL 启停脚本"
   deploy: "render.yaml + docs/DEPLOY.md + .github/workflows/ci.yml\nT20 Render Blueprint 同源单服务 + free PG + GitHub Actions CI"
 }
 

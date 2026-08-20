@@ -1,4 +1,4 @@
-# 启动本地 PostgreSQL 16（免管理员、免服务注册）
+﻿# 启动本地 PostgreSQL 16（免管理员、免服务注册）
 # 安装位置：%LOCALAPPDATA%\PostgreSQL\pgsql（EDB 官方二进制包）
 $ErrorActionPreference = 'Stop'
 $pg = Join-Path $env:LOCALAPPDATA 'PostgreSQL\pgsql'

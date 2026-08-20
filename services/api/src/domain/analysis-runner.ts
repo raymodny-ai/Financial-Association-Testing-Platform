@@ -2,17 +2,17 @@
  * 分析编排器（T17，domain 层）。
  *
  * 全链路：数据加载（ticker 适配器 / CSV 上传映射）→ prepareDataset（T09）→
- * 卡方族（T10）+ 连续检验注册表（T11）+ 多重校正（T12）→ 滚动窗口（T13）→
- * 审计（T14）→ buildLlmContext（T15）→ LLM 推理（T16，注入）。
+ * 卡方族（T10）+ 连续检验注册表（T11）+ 滞后扫描（PRD 模块 H）+ 多重校正（T12）→
+ * 滚动窗口（T13）→ 审计（T14）→ buildLlmContext（T15）→ LLM 推理（T16，注入）。
  *
  * 依赖全部注入（RunnerDeps），本模块无 IO、无框架依赖，可纯单测。
- * 滞后分析（lag>0）产出引擎尚未实现（N13），本编排暂不产出滞后行。
  */
 import {
   auditSeries,
   buildLlmContext,
   correctAndMark,
   getContinuousMethod,
+  lagScan,
   listContinuousMethodNames,
   pairwiseChiSquare,
   prepareDataset,
@@ -223,7 +223,37 @@ export async function runAnalysis(config: TaskConfig, deps: RunnerDeps): Promise
     }
   }
 
-  // 5. 滚动窗口（按族统一校正前单独成批）
+  // 5. 滞后分析（PRD 模块 H：检验期数值对 × [-maxLag, +maxLag] Pearson 扫描，单独成批校正）
+  const lagDrafts: DraftRow[] = [];
+  if (config.maxLag > 0) {
+    for (let i = 0; i < dataset.aliases.length; i += 1) {
+      for (let j = i + 1; j < dataset.aliases.length; j += 1) {
+        const x = dataset.values[i]!.slice(testStart, testEnd + 1);
+        const y = dataset.values[j]!.slice(testStart, testEnd + 1);
+        try {
+          const scan = lagScan(x, y, config.maxLag);
+          for (const p of scan.points) {
+            lagDrafts.push({
+              family: 'continuous',
+              testName: 'pearson_lag',
+              left: dataset.aliases[i]!,
+              right: dataset.aliases[j]!,
+              windowEnd: null,
+              lag: p.lag,
+              stat: p.r,
+              pRaw: p.pValue,
+              effect: null,
+              notes: p.lag === scan.bestLag ? `最大绝对相关 lag=${scan.bestLag}（|r|=${scan.bestAbsR.toFixed(4)}）` : null,
+            });
+          }
+        } catch {
+          // 检验期切片后样本量不足以支撑 maxLag：跳过该变量对（不产出滞后行）
+        }
+      }
+    }
+  }
+
+  // 6. 滚动窗口（按族统一校正前单独成批）
   let rollingDrafts: DraftRow[] = [];
   let rollingSkippedCount = 0;
   if (config.rolling.enabled) {
@@ -246,14 +276,15 @@ export async function runAnalysis(config: TaskConfig, deps: RunnerDeps): Promise
     }));
   }
 
-  // 6. 多重检验校正：全样本按族分批、滚动单独成批（与 alpha 比较标记显著）
+  // 7. 多重检验校正：全样本按族分批、滞后/滚动各自单独成批（与 alpha 比较标记显著）
   const results = [
     ...finalize(categoricalDrafts, runId, config.tests.correction, config.tests.alpha),
     ...finalize(continuousDrafts, runId, config.tests.correction, config.tests.alpha),
+    ...finalize(lagDrafts, runId, config.tests.correction, config.tests.alpha),
     ...finalize(rollingDrafts, runId, config.tests.correction, config.tests.alpha),
   ];
 
-  // 7. 数据真实性审计（每个原始数据源；双源对账待任务配置支持，见 N14）
+  // 8. 数据真实性审计（每个原始数据源；双源对账待任务配置支持，见 N14）
   const audit: AuditRow[] = [];
   const auditNotes: Record<string, string[]> = {};
   for (const [alias, points] of auditPointsByAlias) {
@@ -267,7 +298,7 @@ export async function runAnalysis(config: TaskConfig, deps: RunnerDeps): Promise
     auditNotes[alias] = report.notes;
   }
 
-  // 8. LLM 上下文 + 推理（缺密钥降级 skipped，失败不阻塞统计结果）
+  // 9. LLM 上下文 + 推理（缺密钥降级 skipped，失败不阻塞统计结果）
   const context = buildLlmContext({
     config,
     results,

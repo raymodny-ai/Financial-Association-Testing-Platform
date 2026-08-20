@@ -19,5 +19,6 @@ export * from './mutual-information';
 export * from './continuous-registry';
 export * from './correction';
 export * from './rolling';
+export * from './lag';
 export * from './audit';
 export * from './llm-context';

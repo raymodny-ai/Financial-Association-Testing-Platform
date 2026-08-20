@@ -1,6 +1,6 @@
 # Financial Association Testing Platform · 金融关联性检验平台
 
-面向金融研究场景的**关联性统计检验 Web 平台**：上传行情数据（Yahoo Finance 在线抓取或 CSV 上传）→ 五步向导配置样本区间 / 期间划分 / 检验选项 → 一键运行**卡方族 + 连续变量**统计检验流水线（含多重检验校正与滚动窗口）→ 内置**数据真实性审计**与**可选 LLM 智能解释**（qwen / deepseek）→ 三栏结果页可视化与一键导出。
+面向金融研究场景的**关联性统计检验 Web 平台**：上传行情数据（Yahoo Finance 在线抓取或 CSV 上传）→ 五步向导配置样本区间 / 期间划分 / 检验选项 → 一键运行**卡方族 + 连续变量**统计检验流水线（含多重检验校正、滚动窗口与滞后分析）→ 内置**数据真实性审计**与**可选 LLM 智能解释**（qwen / deepseek）→ 三栏结果页可视化与一键导出。
 
 > 匿名即用：无需注册登录，浏览器经 httpOnly Cookie 自动获得隔离的匿名工作区（G5 模型），任务与上传文件严格归属各自工作区。
 
@@ -14,6 +14,7 @@
 | 检验流水线 | 标准化 + 离散化（等频/等宽分箱）→ 成对卡方独立性检验、Student's t、Pearson / Spearman 相关、互信息（置换检验） |
 | 多重检验校正 | Bonferroni / Benjamini-Hochberg / Benjamini-Yekutieli，按族分批 |
 | 滚动窗口 | 可配置窗口长度的时序滚动重算（退化窗口记 skipped 不中断） |
+| 滞后分析 | [-maxLag,+maxLag] 全整数滞后 Pearson 扫描（PRD 模块 H），最优 lag 自动标注；结果页曲线图 + 表格双视图 |
 | 数据真实性审计 | 缺失率 / 跳点 / 陈旧数据 / 双源一致性六类审计，pass/warn/fail 三级判定；fail 序列强制注入 LLM 安全旗标（置信降级） |
 | LLM 解释 | qwen（DashScope）/ deepseek 可选；提示词模板版本化（`prompts/`），输出经 Zod Schema 严格校验；无密钥自动降级 skipped，不阻塞统计结果 |
 | 前端 | 五步新建分析向导、三栏结果页（配置摘要 + 检验 Tab 区 + 导出）、历史任务列表；CSV / JSON 客户端导出 |
@@ -148,8 +149,8 @@ https://dashboard.render.com/blueprint/new?repo=https://github.com/raymodny-ai/F
 
 当前为 **P0 MVP**（T01~T20 已完成）。在册缺口（详见 `.agent/CONTEXT.md`）：
 
-- web 主 chunk 1.3MB（待代码分割）· 滚动窗口 minSamples/methods 前端透传 · 滞后分析（lag>0）引擎
-- 双源一致性审计接入编排 · 派生序列编辑 UI · 交易所节假日日历
+- web 主 chunk 1.3MB（待代码分割）· 滚动窗口 minSamples/methods 前端透传
+- 双源一致性审计接入编排 · 配置模板复用（保存模板/复制分析/重跑同配置）· 派生序列编辑 UI · 交易所节假日日历
 - Render free PostgreSQL 90 天试用期提醒
 
 ---

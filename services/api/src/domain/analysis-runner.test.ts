@@ -153,6 +153,31 @@ describe('runAnalysis · 全链路（注入 fake 依赖）', () => {
     expect(outcome.llm.context).toEqual(interpretCalls[0]!.context);
   });
 
+  it('滞后分析（PRD 模块 H）：maxLag>0 时产出 [-maxLag,+maxLag] 全扫描行并标注最优 lag', async () => {
+    const config: TaskConfig = {
+      ...baseConfig,
+      maxLag: 3,
+      rolling: { enabled: false, windowDays: 60, stepDays: 21 },
+    };
+    const { deps, interpretCalls } = fakeDeps();
+    const outcome = await runAnalysis(config, deps);
+
+    const lagRows = outcome.results.filter((r) => r.test_name === 'pearson_lag');
+    // 1 对变量 × (2×3+1)=7 个 lag 切片
+    expect(lagRows).toHaveLength(7);
+    expect(lagRows.map((r) => r.lag).sort((a, b) => a - b)).toEqual([-3, -2, -1, 0, 1, 2, 3]);
+    for (const row of lagRows) {
+      expect(row.test_family).toBe('continuous');
+      expect(row.window_end).toBeNull();
+    }
+    // 最优 lag 标注恰好一行（notes 含 |r|）
+    const best = lagRows.filter((r) => r.notes?.includes('最大绝对相关'));
+    expect(best).toHaveLength(1);
+
+    // LLM 上下文承接：lag 关键发现不再是占位文案
+    expect(interpretCalls[0]!.context.lag_key_findings).not.toContain('未产出滞后分析结果');
+  });
+
   it('CSV 上传源：字段映射 date_col/close_col/adj_close_col 生效', async () => {
     const csv = [
       'date,close,adj_close',

@@ -64,8 +64,9 @@ const runConfig = {
     testStart: '2024-07-01',
     testEnd: '2024-12-31',
   },
-  // 集成测试提速：关闭滚动窗口
+  // 集成测试提速：关闭滚动窗口；显式关闭滞后扫描（schema 默认 maxLag=10 会改变结果行数基线）
   rolling: { enabled: false },
+  maxLag: 0,
 };
 
 function cookieOf(res: request.Response): string {

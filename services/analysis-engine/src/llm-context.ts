@@ -42,7 +42,7 @@ export interface LlmContextInput {
   config: TaskConfig;
   /** 用户研究问题；缺省时由 projectName 派生（N12：taskConfigSchema 暂无该字段） */
   researchQuestion?: string;
-  /** 主结果长表：window_end 非空 = 滚动行，lag>0 = 滞后行，其余为全样本行 */
+  /** 主结果长表：window_end 非空 = 滚动行，lag≠0 = 滞后行，其余为全样本行 */
   results: readonly ResultRow[];
   /** 滚动分析中被跳过的退化窗口数量（T13 skipped） */
   rollingSkippedCount?: number;
@@ -256,7 +256,7 @@ function sampleInfo(config: TaskConfig): string {
 export function buildLlmContext(input: LlmContextInput): LlmContext {
   const { config, results } = input;
   const rolling = results.filter((r) => r.window_end !== null);
-  const lag = results.filter((r) => r.window_end === null && r.lag > 0);
+  const lag = results.filter((r) => r.window_end === null && r.lag !== 0);
   const fullSample = results.filter((r) => r.window_end === null && r.lag === 0);
   const categorical = fullSample.filter((r) => r.test_family === 'categorical');
   const continuous = fullSample.filter((r) => r.test_family === 'continuous');

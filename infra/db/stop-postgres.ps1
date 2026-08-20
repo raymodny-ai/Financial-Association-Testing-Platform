@@ -1,4 +1,4 @@
-# 停止本地 PostgreSQL 16
+﻿# 停止本地 PostgreSQL 16
 $ErrorActionPreference = 'Stop'
 $pg = Join-Path $env:LOCALAPPDATA 'PostgreSQL\pgsql'
 
