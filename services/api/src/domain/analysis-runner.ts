@@ -23,6 +23,7 @@ import {
 import type {
   AuditRow,
   CorrectionMethod,
+  ExportPanel,
   LlmContext,
   LlmOutput,
   LlmTrace,
@@ -51,6 +52,8 @@ export interface AnalysisOutcome {
   results: ResultRow[];
   /** 审计表（每个原始数据源一行） */
   audit: AuditRow[];
+  /** 标准化研究面板快照（PRD 导出规范 01~05 底座，G4） */
+  panel: ExportPanel;
   llm: { context: LlmContext; output: LlmOutput | null; trace: LlmTrace };
 }
 
@@ -325,7 +328,32 @@ export async function runAnalysis(config: TaskConfig, deps: RunnerDeps): Promise
     auditNotes[alias] = report.notes;
   }
 
-  // 9. LLM 上下文 + 推理（缺密钥降级 skipped，失败不阻塞统计结果）
+  // 9. 导出面板快照（PRD 导出规范 01/04/05 底座；02 复权来自上传源 adj_close；03 收益率由前端派生）
+  const adjustedExport: ExportPanel['adjusted'] = {};
+  for (const [alias, adjusted] of adjustedByAlias) {
+    adjustedExport[alias] = adjusted;
+  }
+  const panel: ExportPanel = {
+    run_id: runId,
+    aliases: [...dataset.aliases],
+    dates: [...dataset.dates],
+    prices: dataset.values.map((row) => [...row]),
+    categories: dataset.aliases.map((alias) => [...dataset.categories[alias]!]),
+    thresholds: Object.fromEntries(
+      dataset.aliases.map((alias) => [
+        alias,
+        {
+          method: config.binning.method,
+          labels: [...dataset.binning[alias]!.labels],
+          thresholds: [...dataset.binning[alias]!.thresholds],
+        },
+      ]),
+    ),
+    adjusted: adjustedExport,
+    periods: { ...config.periods },
+  };
+
+  // 10. LLM 上下文 + 推理（缺密钥降级 skipped，失败不阻塞统计结果）
   const context = buildLlmContext({
     config,
     results,
@@ -335,5 +363,5 @@ export async function runAnalysis(config: TaskConfig, deps: RunnerDeps): Promise
   });
   const llm = await deps.interpret(context, config.llmModel, runId);
 
-  return { runId, results, audit, llm: { context, output: llm.output, trace: llm.trace } };
+  return { runId, results, audit, panel, llm: { context, output: llm.output, trace: llm.trace } };
 }

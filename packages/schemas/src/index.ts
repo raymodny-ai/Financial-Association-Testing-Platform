@@ -8,5 +8,6 @@ export * from './common';
 export * from './task';
 export * from './result';
 export * from './audit';
+export * from './panel';
 export * from './llm';
 export * from './file';

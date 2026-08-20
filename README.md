@@ -17,7 +17,7 @@
 | 滞后分析 | [-maxLag,+maxLag] 全整数滞后 Pearson 扫描（PRD 模块 H），最优 lag 自动标注；结果页曲线图 + 表格双视图 |
 | 数据真实性审计 | 缺失率 / 跳点 / 陈旧数据六类审计，pass/warn/fail 三级判定；双源一致性审计（同标的第二数据源：状态一致率 + 同质性卡方）；fail 序列强制注入 LLM 安全旗标（置信降级） |
 | LLM 解释 | qwen（DashScope）/ deepseek 可选；提示词模板版本化（`prompts/`），输出经 Zod Schema 严格校验；无密钥自动降级 skipped，不阻塞统计结果 |
-| 前端 | 五步新建分析向导、三栏结果页（配置摘要 + 检验 Tab 区 + 导出）、历史任务列表；CSV / JSON 客户端导出 |
+| 前端 | 五步新建分析向导、三栏结果页（配置摘要 + 检验 Tab 区 + 导出）、历史任务列表；PRD 01~15 编号导出体系（数据面板 / 检验结果 / 审计 / LLM 产物 / 完整 HTML 报告） |
 
 ---
 
@@ -43,8 +43,8 @@
 │   ├── shared                  # AppError 错误族
 │   └── ui                      # 设计 Token 唯一来源（tokens.ts / tokens.css）
 ├── services/
-│   ├── analysis-engine         # 纯函数统计/审计引擎（无 IO、无框架依赖，131 测试）
-│   └── api                     # Express 5 网关：任务编排 / 数据适配 / LLM 推理（79 测试）
+│   ├── analysis-engine         # 纯函数统计/审计引擎（无 IO、无框架依赖，141 测试）
+│   └── api                     # Express 5 网关：任务编排 / 数据适配 / LLM 推理（82 测试）
 ├── prompts/                    # LLM 提示词模板 + output_schema.json（版本号入 trace）
 ├── infra/db                    # PostgreSQL 迁移 SQL + 本地免管理员启停脚本
 ├── tests/fixtures              # 黄金基准集 stat-reference.json（scipy/numpy 参考值）
@@ -114,14 +114,14 @@ pnpm --filter @platform/web dev
 ## ✅ 常用命令
 
 ```bash
-pnpm test                # 全仓测试（5 包共 229 例）
+pnpm test                # 全仓测试（5 包共 248 例）
 pnpm typecheck           # 全仓 TypeScript 严格检查
 pnpm lint                # ESLint
 pnpm build               # 全仓构建（web: vite / api: tsup）
 pnpm --filter @platform/api db:migrate   # 应用数据库迁移（幂等）
 ```
 
-测试矩阵：analysis-engine **131** · api **79**（含 PostgreSQL 集成测试与审计注入测试）· schemas **8** · ui **7** · shared **4**。
+测试矩阵：analysis-engine **141** · api **82**（含 PostgreSQL 集成测试与审计注入测试）· schemas **14** · ui **7** · shared **4**。
 
 ---
 
@@ -147,7 +147,7 @@ https://dashboard.render.com/blueprint/new?repo=https://github.com/raymodny-ai/F
 
 ## 🗺️ 路线图与已知缺口
 
-当前为 **P0 MVP**（T01~T20 已完成）。在册缺口（详见 `.agent/CONTEXT.md`）：
+当前为 **P0 MVP**（T01~T20 已完成），PRD 缺口补全进行中：滞后分析（模块 H）、双源审计编排（模块 J）、01~15 编号导出已交付。在册缺口（详见 `.agent/CONTEXT.md`）：
 
 - web 主 chunk 1.3MB（待代码分割）· 滚动窗口 minSamples/methods 前端透传
 - 配置模板复用（保存模板/复制分析/重跑同配置）· CSV 上传源的第二文件双源审计 UI · 派生序列编辑 UI · 交易所节假日日历

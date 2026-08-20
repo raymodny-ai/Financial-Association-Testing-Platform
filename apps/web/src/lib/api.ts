@@ -8,6 +8,7 @@ import {
   taskRecordSchema,
   resultTableSchema,
   auditTableSchema,
+  exportPanelSchema,
   llmContextSchema,
   llmOutputSchema,
   llmTraceSchema,
@@ -16,6 +17,7 @@ import {
   type TaskRecord,
   type ResultRow,
   type AuditRow,
+  type ExportPanel,
   type LlmContext,
   type LlmOutput,
   type LlmTrace,
@@ -100,6 +102,8 @@ export interface TaskResults {
   task: TaskRecord;
   results: ResultRow[];
   audit: AuditRow[];
+  /** 导出面板快照（G4；G4 之前运行的历史任务为 null） */
+  panel: ExportPanel | null;
   llm: { context: LlmContext; output: LlmOutput | null; trace: LlmTrace } | null;
 }
 
@@ -107,6 +111,7 @@ const taskResultsSchema = z.object({
   task: taskRecordSchema,
   results: resultTableSchema,
   audit: auditTableSchema,
+  panel: exportPanelSchema.nullable().default(null),
   llm: z
     .object({
       context: llmContextSchema,

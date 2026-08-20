@@ -33,6 +33,8 @@
 | 滞后扫描（lagScan） | PRD 模块 H（G1/G2）：lag=k（k>0）= x 领先 y k 期（x[0..n-1-k]↔y[k..n-1]），k<0 对称；扫描 [-maxLag,+maxLag] 全整数 lag 的 Pearson r/p/n，bestLag=最大 abs(r)（并列取 abs(lag) 更小）；退化切片（零方差）跳过不中断，全退化抛 RangeError；注意 -0 归一（Object.is 区分 ±0）。 |
 | 滞后行（pearson_lag） | 编排产出：family=continuous、test_name='pearson_lag'、检验期数值切片、单独成批校正；最优 lag 行 notes 标注 abs(r)；DB lag 约束 ±60（迁移 004）；前端按 test_name 分区（兼容负 lag）。 |
 | 滞后双视图（LagCurveChart） | 结果页滞后 Tab（PRD 模块 H）：零依赖 SVG 折线图（x=lag/y=r∈[-1,1]，按变量对取 --chart-series-* 序列色，显著点实心加重）+ 表格双视图；未启用时（maxLag=0）引导文案。 |
+| 导出面板快照（ExportPanel，G4） | PRD 导出规范 01~05 号文件的数据底座：runAnalysis 产出 {aliases/dates/prices/categories/thresholds/adjusted/periods}，run_panels 表 JSONB 持久化（重跑 ON CONFLICT 替换，迁移 005），GET results 随产物返回；G4 前历史任务为 null（前端禁用 01~05 并提示重跑）。 |
+| 导出规范 01~15（export-report.ts） | PRD 导出文件编号体系：01 原始价/02 复权价/03 收益率/04 状态面板/05 阈值 JSON（依赖 panel）· 06 卡方/07 连续/08 滚动/09 滞后按变量对拆分 · 10 质量审计/11 源一致性 · 12 LLM 上下文/13 结论 Markdown/14 追踪 · 15 完整报告 HTML（7 节：数据概况/方法/显著/不稳定/质量/LLM/禁止性，escapeHtml 防注入）；分区口径与 ResultsPage Tab 同源（partitionResults）。 |
 | 研究摘要对象（buildLlmContext） | PRD 模块 K：LLM 不读大表，只读 12 字段上下文。输入 TaskConfig+ResultTable+AuditTable；行分区规则 window_end 非空=滚动、lag≠0=滞后、其余=全样本；输出经 llmContextSchema 运行时校验。 |
 | 全局置信旗标（global_confidence_flags） | 输入侧安全约束注入：审计 fail→置信降级、弱效应显著→统计显著≠经济显著、少数窗口显著→禁述稳定规律、correction=none→假阳性提示。 |
 | 提示词渲染（renderPrompt） | {{placeholder}} ← LlmContext 12 字段同源；数组渲染编号列表、空数组渲染「无」；未知占位符抛错防模板-契约漂移。 |
@@ -40,7 +42,7 @@
 | OpenAI 兼容客户端（openAiCompatibleClient） | qwen（DashScope compatible-mode）与 deepseek 同一 chat/completions 协议；response_format=json_object；AbortError→LlmTimeoutError，非 2xx→AppError(502)。 |
 | 黄金基准集 | tests/fixtures/stat-reference.json，scipy/numpy 参考值对拍，容差 1e-9（ADR 001 决策二）。 |
 | 任务运行编排（runAnalysis） | T17-A domain 层纯 DI：数据加载（ticker 适配器/CSV 映射 date_col/close_col/adj_close_col）→ prepareDataset → 卡方族+连续注册表三法 → 滞后扫描（maxLag>0 时）→ 校正（全样本按族分批、滞后/滚动各自单独成批）→ 滚动窗口 → 每源审计 → buildLlmContext → interpret；重跑语义为 result/audit 整体替换、llm_artifacts ON CONFLICT 更新。 |
-| 运行/结果端点 | POST /api/tasks/:id/run（running 时 409，失败回写 status=failed）与 GET /api/tasks/:id/results（task+results+audit+llm 三产物一次返回，出参过 Zod 校验）。 |
+| 运行/结果端点 | POST /api/tasks/:id/run（running 时 409，失败回写 status=failed，成功后 panelRepository.save 落盘快照）与 GET /api/tasks/:id/results（task+results+audit+panel+llm 四产物一次返回，出参过 Zod 校验）。 |
 | 新建分析向导（HomePage） | T17-B 五步 Steps：数据源（ticker/CSV 动态列表+列映射）→ 样本区间 → 期间划分 → 检验选项 → 预览与运行；提交前 taskConfigSchema.safeParse 全量校验（workspaceId 占位，服务端 Cookie 覆盖），创建→同步运行→跳结果页。 |
 | 安全基线（T18） | helmet 安全头 + 固定窗口限流（rateLimiter 按 IP，默认 300/60s，内存计数）+ Origin 白名单 CORS（凭据 Cookie 支持，缺省同源）+ x-request-id 生成/透传 + 请求体错误映射（非法 JSON→400、超限→413）+ 非法 UUID 路径参数一律 404（assertUuidParam）+ 生产 Cookie Secure。 |
 | 结构化日志（createLogger） | T18 定案：不引入 pino/winston（ADR 001 极简依赖；外部生成工具需密钥弃用），自实现 JSON 行日志（time/level/msg+字段，Error 序列化为 {message,stack}），sink 可注入；requestLogger 记 method/path/status/durationMs/requestId，不落 Cookie；path 记 originalUrl（顶层中间件 req.path 会丢挂载前缀）。 |
@@ -58,8 +60,8 @@
 | packages/ui | 设计 Token 唯一来源（tokens.ts/tokens.css），业务禁硬编码色值字体 | 被 web 消费 |
 | services/api | Express 5 网关。presentation(路由/中间件：workspace+error-handler+security 四件套+同源静态托管) → domain(契约/注册表/提示词渲染/LLM 编排/任务运行编排：含滞后扫描与 dualSource 双源对账) → infrastructure(适配器/仓储/迁移/LLM 客户端与提供方解析/logger) | DataProvider 契约（fetchHistory）插件式注册；LlmChatClient 传输契约；RunnerDeps 依赖注入；createApp(AppOptions) 安全基线可注入（rateLimit/cors/bodyLimit/logger）；pg + 手写 SQL 迁移；生产经 tsup 打包（tsup.config.ts，@platform/* 内联） |
 | services/analysis-engine | 纯函数分析引擎：管道（T09）→ 卡方族（T10）→ 连续检验（T11）→ 校正（T12）→ 滚动窗口（T13）→ 数据真实性审计（T14）→ LLM 上下文构造（T15）→ 滞后扫描（lag.ts，PRD 模块 H） | 输入 NumericSeries[]/PreparedDataset/数值对/p 值批次/AuditPoint[]/TaskConfig+ResultTable+AuditTable，无 IO、无框架依赖；jstat 为 CJS 包，一律 default 导入（Node ESM 命名导入会 SyntaxError）；jstat.d.ts 经三斜线引用随源文件跨包传播 |
-| apps/web | React + Vite + AntD + tokens.css（禁 Tailwind）：新建分析向导/三栏结果页/历史任务列表；lib/api.ts fetch 封装（credentials:'include'，出参过 Zod 校验）+ lib/export.ts 客户端导出 | 经 /api 调网关；样式一律 tokens.css 变量与语义类，页面补充样式在 app.css（仅引用 Token 变量） |
-| infra/db | PostgreSQL 免管理员部署脚本 + 迁移 SQL（001 tasks/result_rows/audit_rows、002 uploaded_files、003 llm_artifacts、004 lag 约束放宽至 ±60） | migrate.ts 运行器（schema_migrations 记账）；start/stop-postgres.ps1 必须 UTF-8 带 BOM（PowerShell 5.1 无 BOM 时中文注释破坏解析） |
+| apps/web | React + Vite + AntD + tokens.css（禁 Tailwind）：新建分析向导/三栏结果页/历史任务列表；lib/api.ts fetch 封装（credentials:'include'，出参过 Zod 校验）+ lib/export.ts 下载原语（downloadText 支撑 md/html）+ lib/export-report.ts 01~15 编号导出生成器 | 经 /api 调网关；样式一律 tokens.css 变量与语义类，页面补充样式在 app.css（仅引用 Token 变量） |
+| infra/db | PostgreSQL 免管理员部署脚本 + 迁移 SQL（001 tasks/result_rows/audit_rows、002 uploaded_files、003 llm_artifacts、004 lag 约束放宽至 ±60、005 run_panels 导出面板快照） | migrate.ts 运行器（schema_migrations 记账）；start/stop-postgres.ps1 必须 UTF-8 带 BOM（PowerShell 5.1 无 BOM 时中文注释破坏解析） |
 | prompts/ | LLM 提示词模板 + output_schema.json | T16 经 loadPromptAssets 消费（版本号写入 llm_trace） |
 
 ## 已定案（速查）
@@ -70,4 +72,4 @@
 
 ## 已知缺口（记录不阻塞）
 
-N1 web 主 chunk 1.3MB/gzip 409KB（T17 分割待做）· ~~N2 api 生产依赖 tsx~~（T20 已闭：tsup 打包）· N3 Zod 3 record 无 min · ~~N4 api 集成测试依赖本地 DB~~（T20 已闭：GitHub Actions CI 带 postgres:16 service）· N5 Yahoo 非官方无 SLA（回退路径见 ADR）· N6 ticker 符号命名校验（T17 前端提示）· N7 binningConfigSchema 缺 fixed_threshold 的 thresholds 字段（MVP 不支持 fixed_threshold，实现已显式抛错）· N8 chi2sf 黄金验证仅覆盖偶数自由度 · N9 jstat studentt.cdf 精度仅 ~5e-9，df≤2 已改用解析闭式解规避 · N10 rollingConfigSchema 缺 minSamples 与 methods 字段（引擎已支持，schemas/前端待透传） · N11 缺失交易日按周一至周五日历近似，未接入交易所节假日日历 · N12 taskConfigSchema 无 researchQuestion 字段，LLM 上下文缺省时由 projectName 派生（schemas/前端待补） · N13 滞后分析（lag>0 行）尚无产出引擎，lag_key_findings 暂为占位（编排层待实现） · N14 双源一致性审计（source_match_ratio）未接入 runAnalysis，单源运行恒为 1（编排层待实现双源配对） · N15 新建分析向导无派生序列（derivedSeries）编辑 UI，默认空数组（前端待补） · N16 x-filename 头 URI 编码/解码为本仓私有约定，非标准 RFC 5987（已在 docs/DEPLOY.md 注明） · N17 限流为单实例内存计数，多实例部署需换 Redis 等共享存储
+N1 web 主 chunk 1.3MB/gzip 409KB（T17 分割待做）· ~~N2 api 生产依赖 tsx~~（T20 已闭：tsup 打包）· N3 Zod 3 record 无 min · ~~N4 api 集成测试依赖本地 DB~~（T20 已闭：GitHub Actions CI 带 postgres:16 service）· N5 Yahoo 非官方无 SLA（回退路径见 ADR）· N6 ticker 符号命名校验（T17 前端提示）· N7 binningConfigSchema 缺 fixed_threshold 的 thresholds 字段（MVP 不支持 fixed_threshold，实现已显式抛错）· N8 chi2sf 黄金验证仅覆盖偶数自由度 · N9 jstat studentt.cdf 精度仅 ~5e-9，df≤2 已改用解析闭式解规避 · N10 rollingConfigSchema 缺 minSamples 与 methods 字段（引擎已支持，schemas/前端待透传） · N11 缺失交易日按周一至周五日历近似，未接入交易所节假日日历 · N12 taskConfigSchema 无 researchQuestion 字段，LLM 上下文缺省时由 projectName 派生（schemas/前端待补） · ~~N13 滞后分析引擎未实现~~（G1/G2 已闭：lagScan 全扫描+双视图） · ~~N14 双源一致性审计未接入编排~~（G3 已闭：dualSource 接通） · N15 新建分析向导无派生序列（derivedSeries）编辑 UI，默认空数组（前端待补） · N16 x-filename 头 URI 编码/解码为本仓私有约定，非标准 RFC 5987（已在 docs/DEPLOY.md 注明） · N17 限流为单实例内存计数，多实例部署需换 Redis 等共享存储 · N18 CSV 上传源的第二文件双源审计前端 UI 未实现（契约已支持 dualSource.fileId，G3 残留） · N19 配置模板复用（保存模板/复制分析/重跑同配置）未实现（PRD 要求） · N20 Render free PostgreSQL 90 天到期迁移路径未入 DEPLOY.md

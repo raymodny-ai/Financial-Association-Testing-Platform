@@ -140,6 +140,23 @@ describe('runAnalysis · 全链路（注入 fake 依赖）', () => {
     }
   });
 
+  it('导出面板（G4）：outcome.panel 含 01/04/05 号文件底座且维度自洽', async () => {
+    const { deps } = fakeDeps();
+    const outcome = await runAnalysis(baseConfig, deps);
+    const panel = outcome.panel;
+    expect(panel.run_id).toBe(outcome.runId);
+    expect(panel.aliases.sort()).toEqual(['A', 'B']);
+    expect(panel.dates.length).toBeGreaterThan(0);
+    expect(panel.prices).toHaveLength(panel.aliases.length);
+    expect(panel.categories).toHaveLength(panel.aliases.length);
+    for (const row of panel.prices) expect(row).toHaveLength(panel.dates.length);
+    for (const row of panel.categories) expect(row).toHaveLength(panel.dates.length);
+    for (const alias of panel.aliases) {
+      expect(panel.thresholds[alias]?.thresholds.length).toBeGreaterThan(0);
+    }
+    expect(panel.periods).toEqual(baseConfig.periods);
+  });
+
   it('LLM 上下文注入 12 字段且透传 trace', async () => {
     const { deps, interpretCalls } = fakeDeps();
     const outcome = await runAnalysis(baseConfig, deps);

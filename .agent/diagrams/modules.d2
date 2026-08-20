@@ -10,7 +10,7 @@ services: {
   api: "services/api\nExpress 5 网关" {
     presentation: "routes(tasks 含 run/results、files) + middleware(workspace/error-handler/security：helmet+限流+CORS+请求ID+UUID防护) + static(T20 同源托管 web 产物 + SPA 回退，WEB_DIST_DIR 可关)"
     domain: "DataProvider 契约 + provider-registry + analysis-runner 任务运行编排 + prompt-renderer + llm-service 编排"
-    infrastructure: "adapters(yahoo/stooq/csv-parse/llm-http) + repositories(task/file/result/llm_artifacts) + migrate/db + llm-config/prompt-assets/llm-runner + logger(JSON 行结构化日志)"
+    infrastructure: "adapters(yahoo/stooq/csv-parse/llm-http) + repositories(task/file/result+panel/llm_artifacts) + migrate/db + llm-config/prompt-assets/llm-runner + logger(JSON 行结构化日志)"
   }
   analysis-engine: "services/analysis-engine\n纯函数分析引擎" {
     transform: "派生变换 pct/log/diff"
@@ -38,12 +38,12 @@ apps: {
     results: "ResultsPage 三栏结果页（.layout-results + 风险固定条 + Tab 区 + 导出）"
     lag-chart: "LagCurveChart 零依赖 SVG 滞后曲线图（与表格双视图，PRD 模块 H）"
     history: "HistoryPage 任务列表（状态标签 + 重跑）"
-    lib: "lib/api.ts fetch 封装（credentials:'include' + Zod 出参校验） + lib/export.ts 客户端导出"
+    lib: "lib/api.ts fetch 封装（credentials:'include' + Zod 出参校验，含 panel 快照） + lib/export.ts 下载原语 + lib/export-report.ts 01~15 编号导出生成器"
   }
 }
 
 infra: {
-  db: "infra/db\n迁移 SQL（004 含 lag ±60）+ 本地 PostgreSQL 启停脚本"
+  db: "infra/db\n迁移 SQL（004 lag ±60、005 run_panels 导出面板快照）+ 本地 PostgreSQL 启停脚本"
   deploy: "render.yaml + docs/DEPLOY.md + .github/workflows/ci.yml\nT20 Render Blueprint 同源单服务 + free PG + GitHub Actions CI"
 }
 

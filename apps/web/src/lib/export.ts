@@ -41,3 +41,8 @@ export function downloadCsv(filename: string, headers: readonly string[], rows: 
 export function downloadJson(filename: string, value: unknown): void {
   downloadBlob(JSON.stringify(value, null, 2), filename, 'application/json');
 }
+
+/** 纯文本/标记语言导出（markdown / html，PRD 13/15 号文件） */
+export function downloadText(filename: string, content: string, mime: string): void {
+  downloadBlob(content, filename, mime);
+}

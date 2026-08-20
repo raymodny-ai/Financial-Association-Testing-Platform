@@ -1,8 +1,8 @@
 /**
- * 结果 / 审计 / LLM 产物仓储（T17，基础设施层）。
- * 均按 task_id 作用域；重跑语义为整体替换（DELETE + INSERT 同事务）。
+ * 结果 / 审计 / LLM 产物 / 导出面板仓储（T17 + G4，基础设施层）。
+ * 均按 task_id 作用域；重跑语义为整体替换（DELETE + INSERT 同事务 / ON CONFLICT 更新）。
  */
-import type { AuditRow, LlmContext, LlmOutput, LlmTrace, ResultRow } from '@platform/schemas';
+import type { AuditRow, ExportPanel, LlmContext, LlmOutput, LlmTrace, ResultRow } from '@platform/schemas';
 import { pool } from '../db.js';
 
 export const resultRepository = {
@@ -154,5 +154,28 @@ export const llmArtifactRepository = {
       [taskId],
     );
     return rows[0] ?? null;
+  },
+};
+
+/** 导出面板快照仓储（G4：run_panels，JSONB 整体存取，重跑替换） */
+export const panelRepository = {
+  async save(taskId: string, panel: ExportPanel): Promise<void> {
+    await pool.query(
+      `INSERT INTO run_panels (task_id, run_id, payload, updated_at)
+       VALUES ($1, $2, $3, now())
+       ON CONFLICT (task_id) DO UPDATE
+       SET run_id = EXCLUDED.run_id,
+           payload = EXCLUDED.payload,
+           updated_at = now()`,
+      [taskId, panel.run_id, JSON.stringify(panel)],
+    );
+  },
+
+  async findByTask(taskId: string): Promise<ExportPanel | null> {
+    const { rows } = await pool.query<{ payload: ExportPanel }>(
+      'SELECT payload FROM run_panels WHERE task_id = $1',
+      [taskId],
+    );
+    return rows[0]?.payload ?? null;
   },
 };

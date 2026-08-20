@@ -121,6 +121,13 @@ describe('POST /api/tasks/:id/run + GET results', () => {
     expect(results.body.llm.trace.status).toBe('skipped');
     expect(results.body.llm.context.research_question).toContain('T17 运行冒烟');
     expect(results.body.llm.output).toBeNull();
+    // 导出面板快照（G4）：01/04/05 底座随结果返回且维度自洽
+    const panel = results.body.panel;
+    expect(panel.aliases.sort()).toEqual(['A', 'B']);
+    expect(panel.dates.length).toBeGreaterThan(0);
+    expect(panel.prices).toHaveLength(2);
+    expect(panel.categories).toHaveLength(2);
+    expect(panel.thresholds.A.thresholds.length).toBeGreaterThan(0);
   }, 30_000);
 
   it('重跑幂等：替换旧结果而非追加', async () => {

@@ -23,6 +23,7 @@ import { fileRepository } from '../../infrastructure/repositories/file-repositor
 import {
   auditRepository,
   llmArtifactRepository,
+  panelRepository,
   resultRepository,
 } from '../../infrastructure/repositories/result-repository.js';
 import { taskRepository, type TaskRow } from '../../infrastructure/repositories/task-repository.js';
@@ -106,6 +107,7 @@ tasksRouter.post('/:id/run', async (req, res) => {
     const outcome = await runAnalysis(row.config, makeRunnerDeps(workspaceId));
     await resultRepository.replaceForTask(row.id, outcome.results);
     await auditRepository.replaceForTask(row.id, outcome.runId, outcome.audit);
+    await panelRepository.save(row.id, outcome.panel);
     await llmArtifactRepository.save({
       taskId: row.id,
       runId: outcome.runId,
@@ -133,15 +135,17 @@ tasksRouter.get('/:id/results', async (req, res) => {
   assertUuidParam(req.params.id);
   const row = await taskRepository.findByIdScoped(req.params.id, workspaceId);
   if (!row) throw new NotFoundError('任务不存在');
-  const [results, audit, llm] = await Promise.all([
+  const [results, audit, llm, panel] = await Promise.all([
     resultRepository.listByTask(row.id),
     auditRepository.listByTask(row.id),
     llmArtifactRepository.findByTask(row.id),
+    panelRepository.findByTask(row.id),
   ]);
   res.json({
     task: toRecord(row),
     results,
     audit,
+    panel,
     llm: llm === null ? null : { context: llm.context, output: llm.output, trace: llm.trace },
   });
 });
