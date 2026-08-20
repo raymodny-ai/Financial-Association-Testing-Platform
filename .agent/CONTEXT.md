@@ -68,6 +68,7 @@
 ## 已定案（速查）
 
 - ADR 001：MVP 不引入 Python；jstat 仅分布函数 + TS 自实现统计；Yahoo chart API 主力源（修订 1，Stooq 休眠保留）+ CSV 并列第一入口；适配器 ≥1s 限速 + 24h 缓存。
+- ADR 002（G14，V1 扩展预留）：HSIC 核独立性检验接入点 = analysis-engine 连续检验注册表 `registerContinuousMethod`（T11 已有 mock_hsic 插件注册测试证明可扩展）；接入时另需扩展 rollingMethodSchema/连续检验枚举。PRD 七层服务的 audit-engine/llm-service 已以 api 内 domain 模块形态落地；report-service（15_full_report.html）当前由前端 export-report.ts 浏览器端生成，V1 如需服务端渲染再抽独立服务，MVP 不拆微服务（与同源单服务部署约束一致）。
 - 数据访问：node-postgres（pg）+ 手写 SQL 迁移，不用 ORM。
 - 统计/审计引擎代码：严格 TDD（RED→GREEN→REFACTOR），先写黄金基准对拍测试。
 
