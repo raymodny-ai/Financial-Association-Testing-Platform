@@ -63,7 +63,7 @@
 | services/analysis-engine | 纯函数分析引擎：管道（T09）→ 卡方族（T10）→ 连续检验（T11）→ 校正（T12）→ 滚动窗口（T13）→ 数据真实性审计（T14）→ LLM 上下文构造（T15）→ 滞后扫描（lag.ts，PRD 模块 H） | 输入 NumericSeries[]/PreparedDataset/数值对/p 值批次/AuditPoint[]/TaskConfig+ResultTable+AuditTable，无 IO、无框架依赖；jstat 为 CJS 包，一律 default 导入（Node ESM 命名导入会 SyntaxError）；jstat.d.ts 经三斜线引用随源文件跨包传播 |
 | apps/web | React + Vite + AntD + tokens.css（禁 Tailwind）：新建分析向导（G6 模板载入/保存/复制分析预填）/三栏结果页/历史任务列表（复制分析）；G7 路由级 React.lazy 懒加载 + manualChunks（vendor-antd/vendor-react 独立缓存）；lib/api.ts fetch 封装（credentials:'include'，出参过 Zod 校验）+ lib/export.ts 下载原语（downloadText 支撑 md/html）+ lib/export-report.ts 01~15 编号导出生成器 | 经 /api 调网关；样式一律 tokens.css 变量与语义类，页面补充样式在 app.css（仅引用 Token 变量） |
 | infra/db | PostgreSQL 免管理员部署脚本 + 迁移 SQL（001 tasks/result_rows/audit_rows、002 uploaded_files、003 llm_artifacts、004 lag 约束放宽至 ±60、005 run_panels 导出面板快照、006 config_templates 分析模板） | migrate.ts 运行器（schema_migrations 记账）；start/stop-postgres.ps1 必须 UTF-8 带 BOM（PowerShell 5.1 无 BOM 时中文注释破坏解析） |
-| prompts/ | LLM 提示词模板 + output_schema.json | T16 经 loadPromptAssets 消费（版本号写入 llm_trace） |
+| prompts/ | LLM 提示词模板 + output_schema.json（PRD 模块 K 10 字段声明，G8 已与 llmOutputSchema 对拍核验） | T16 经 loadPromptAssets 消费（版本号写入 llm_trace）；G8 loadOutputSchema 与 llmOutputSchema 双源一致性守卫测试 |
 
 ## 已定案（速查）
 

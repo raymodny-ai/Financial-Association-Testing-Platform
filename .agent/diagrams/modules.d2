@@ -47,6 +47,6 @@ infra: {
   deploy: "render.yaml + docs/DEPLOY.md + .github/workflows/ci.yml\nT20 Render Blueprint 同源单服务 + free PG + GitHub Actions CI"
 }
 
-prompts: "prompts/\nLLM 模板 + output_schema.json（T16 loadPromptAssets 消费）"
+prompts: "prompts/\nLLM 模板 + output_schema.json（T16 loadPromptAssets 消费；G8 loadOutputSchema 与 llmOutputSchema 对拍守卫）"
 fixtures: "tests/fixtures/stat-reference.json\n黄金基准集（容差 1e-9）"
 jstat: "jstat@1.9.6（npm）\n仅用分布函数，本地 jstat.d.ts 最小类型声明"

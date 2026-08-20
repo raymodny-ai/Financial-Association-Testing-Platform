@@ -2,8 +2,9 @@
  * T16 · LLM 提供方解析与提示词资产加载（单元测试，不触网）。
  */
 import { describe, expect, it } from 'vitest';
+import { llmOutputSchema } from '@platform/schemas';
 import { resolveLlmProvider } from './llm-config.js';
-import { loadPromptAssets } from './prompt-assets.js';
+import { loadOutputSchema, loadPromptAssets } from './prompt-assets.js';
 
 describe('resolveLlmProvider', () => {
   it('qwen 系模型 → DashScope compatible-mode + DASHSCOPE_API_KEY', () => {
@@ -34,5 +35,43 @@ describe('loadPromptAssets', () => {
     expect(assets.systemPrompt).toContain('金融统计解释助手');
     expect(assets.userTemplate).toContain('{{research_question}}');
     expect(assets.userTemplate).toContain('{{forbidden_claims}}');
+  });
+});
+
+/**
+ * G8：PRD 模块 K「输出要求」10 字段一致性守卫——
+ * prompts/output_schema.json（模型侧声明）与 llmOutputSchema（服务端校验）
+ * 互为双源，任一漂移都会导致输出被拒或字段丢失，故强制对拍。
+ */
+describe('output_schema.json ↔ llmOutputSchema 一致性', () => {
+  it('PRD 10 字段全集：required 与 properties 均完整覆盖', () => {
+    const prdFields = [
+      'executive_conclusion',
+      'statistical_interpretation',
+      'stability_assessment',
+      'data_quality_caveats',
+      'market_meaning',
+      'next_research_steps',
+      'monitoring_suggestions',
+      'strategy_risk_notes',
+      'confidence_level',
+      'forbidden_inference_flags',
+    ];
+    const schema = loadOutputSchema();
+    expect(schema.required.slice().sort()).toEqual(prdFields.slice().sort());
+    expect(Object.keys(schema.properties).slice().sort()).toEqual(prdFields.slice().sort());
+  });
+
+  it('与 llmOutputSchema 键集严格一致（含 forbidden_inference_flags/confidence_level）', () => {
+    const schema = loadOutputSchema();
+    const zodKeys = Object.keys(llmOutputSchema.shape).sort();
+    expect(Object.keys(schema.properties).sort()).toEqual(zodKeys);
+    expect(schema.required.slice().sort()).toEqual(zodKeys);
+  });
+
+  it('禁止额外字段：additionalProperties=false 且 confidence_level 限 high/medium/low', () => {
+    const schema = loadOutputSchema();
+    expect(schema.additionalProperties).toBe(false);
+    expect(schema.properties.confidence_level.enum).toEqual(['high', 'medium', 'low']);
   });
 });

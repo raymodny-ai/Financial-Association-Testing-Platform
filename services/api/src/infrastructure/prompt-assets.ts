@@ -37,3 +37,15 @@ export function loadPromptAssets(promptsDir: URL = findPromptsDir()): PromptAsse
     userTemplate: readFileSync(new URL(meta.files.userTemplate, promptsDir), 'utf-8'),
   };
 }
+
+/** PRD 模块 K 输出声明（模型侧 JSON Schema，与 llmOutputSchema 双源对拍，G8 守卫） */
+export interface LlmOutputSchema {
+  required: string[];
+  properties: Record<string, { enum?: string[] }>;
+  additionalProperties: boolean;
+}
+
+/** 加载 prompts/output_schema.json（PRD 10 字段输出声明） */
+export function loadOutputSchema(promptsDir: URL = findPromptsDir()): LlmOutputSchema {
+  return JSON.parse(readFileSync(new URL('output_schema.json', promptsDir), 'utf-8')) as LlmOutputSchema;
+}
