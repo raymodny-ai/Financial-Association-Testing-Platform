@@ -56,7 +56,9 @@
   若日后在 Render 前加装 CDN / 反代，须确保该自定义头不被剥离（预检
   `Access-Control-Allow-Headers` 已包含 x-filename）。
 - **限流单实例内存计数（N17）**：`rateLimiter` 按进程内 Map 计数，
-  Render free 单实例下成立；横向扩容后需换 Redis 等共享存储。
+  Render free 单实例下成立；横向扩容（多实例/多区域）后各实例计数独立，
+  有效限额被放大为 N 倍，需换 Redis 等共享存储（如 Upstash free 层，
+  仅替换 `rateLimiter` 的计数读写，接口层无需改动）。
 - **free PostgreSQL 生命周期**：Render free 数据库有 90 天试用期，到期处理见下节。
 - **free web 服务冷启动**：约 50s 空闲后休眠，首请求有冷启动延迟；
   分析运行（含 LLM）最长约 2 分钟，在 Render 请求超时上限内。
