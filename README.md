@@ -15,7 +15,7 @@
 | 多重检验校正 | Bonferroni / Benjamini-Hochberg / Benjamini-Yekutieli，按族分批 |
 | 滚动窗口 | 可配置窗口长度的时序滚动重算（退化窗口记 skipped 不中断） |
 | 滞后分析 | [-maxLag,+maxLag] 全整数滞后 Pearson 扫描（PRD 模块 H），最优 lag 自动标注；结果页曲线图 + 表格双视图 |
-| 数据真实性审计 | 缺失率 / 跳点 / 陈旧数据 / 双源一致性六类审计，pass/warn/fail 三级判定；fail 序列强制注入 LLM 安全旗标（置信降级） |
+| 数据真实性审计 | 缺失率 / 跳点 / 陈旧数据六类审计，pass/warn/fail 三级判定；双源一致性审计（同标的第二数据源：状态一致率 + 同质性卡方）；fail 序列强制注入 LLM 安全旗标（置信降级） |
 | LLM 解释 | qwen（DashScope）/ deepseek 可选；提示词模板版本化（`prompts/`），输出经 Zod Schema 严格校验；无密钥自动降级 skipped，不阻塞统计结果 |
 | 前端 | 五步新建分析向导、三栏结果页（配置摘要 + 检验 Tab 区 + 导出）、历史任务列表；CSV / JSON 客户端导出 |
 
@@ -150,7 +150,7 @@ https://dashboard.render.com/blueprint/new?repo=https://github.com/raymodny-ai/F
 当前为 **P0 MVP**（T01~T20 已完成）。在册缺口（详见 `.agent/CONTEXT.md`）：
 
 - web 主 chunk 1.3MB（待代码分割）· 滚动窗口 minSamples/methods 前端透传
-- 双源一致性审计接入编排 · 配置模板复用（保存模板/复制分析/重跑同配置）· 派生序列编辑 UI · 交易所节假日日历
+- 配置模板复用（保存模板/复制分析/重跑同配置）· CSV 上传源的第二文件双源审计 UI · 派生序列编辑 UI · 交易所节假日日历
 - Render free PostgreSQL 90 天试用期提醒
 
 ---

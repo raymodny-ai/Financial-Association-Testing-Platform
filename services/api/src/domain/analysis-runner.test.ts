@@ -178,6 +178,34 @@ describe('runAnalysis · 全链路（注入 fake 依赖）', () => {
     expect(interpretCalls[0]!.context.lag_key_findings).not.toContain('未产出滞后分析结果');
   });
 
+  it('双源一致性审计（PRD 模块 J）：dualSource 第二源口径差异 → 一致率低于阈值 warn，第二源不入分析面板', async () => {
+    const config: TaskConfig = {
+      ...baseConfig,
+      dataSources: [
+        { kind: 'ticker', alias: 'A', ticker: 'AAA', provider: 'mock', dualSource: { provider: 'mock2' } },
+        { kind: 'ticker', alias: 'B', ticker: 'BBB', provider: 'mock' },
+      ],
+      rolling: { enabled: false, windowDays: 60, stepDays: 21 },
+    };
+    const { deps, interpretCalls } = fakeDeps({
+      async fetchHistory(provider, ticker) {
+        // mock2：与主源显著不同的价序 → 分箱状态大量不一致
+        return makePanel(ticker, provider === 'mock2' ? 999 : ticker === 'AAA' ? 1 : 3);
+      },
+    });
+    const outcome = await runAnalysis(config, deps);
+
+    const auditA = outcome.audit.find((a) => a.series_alias === 'A')!;
+    expect(auditA.source_match_ratio).toBeLessThan(0.98);
+    expect(auditA.audit_status).toBe('warn');
+    // 未配置双源的 B 保持单源语义（一致率 1）
+    expect(outcome.audit.find((a) => a.series_alias === 'B')!.source_match_ratio).toBe(1);
+    // 第二源仅供审计对账，不得产出分析行
+    expect(outcome.results.length).toBe(4); // 1 分类 + 3 连续（与无双源基线一致）
+    // 双源发现传导至 LLM 上下文
+    expect(interpretCalls[0]!.context.audit_key_findings).toContain('双源一致率');
+  });
+
   it('CSV 上传源：字段映射 date_col/close_col/adj_close_col 生效', async () => {
     const csv = [
       'date,close,adj_close',

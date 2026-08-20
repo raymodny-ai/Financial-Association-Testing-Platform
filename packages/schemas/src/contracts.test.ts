@@ -98,6 +98,54 @@ describe('taskConfigSchema 业务规则', () => {
     const bad = { ...base, dataSources: [base.dataSources[0]] };
     expect(() => taskConfigSchema.parse(bad)).toThrow();
   });
+
+  it('双源一致性审计：ticker 源可携带第二数据源（dualSource.provider，PRD 模块 J）', () => {
+    const withDual = {
+      ...base,
+      dataSources: [
+        { kind: 'ticker', alias: 'spy', ticker: 'SPY.US', provider: 'yahoo', dualSource: { provider: 'stooq' } },
+        base.dataSources[1],
+      ],
+    };
+    const parsed = taskConfigSchema.parse(withDual);
+    const spy = parsed.dataSources[0]!;
+    expect(spy.kind).toBe('ticker');
+    if (spy.kind === 'ticker') expect(spy.dualSource?.provider).toBe('stooq');
+  });
+
+  it('双源一致性审计：upload 源可携带第二上传文件（dualSource.fileId+columnMapping）', () => {
+    const withDual = {
+      ...base,
+      dataSources: [
+        {
+          kind: 'upload',
+          alias: 'spy',
+          fileId: '22222222-2222-4222-8222-222222222222',
+          columnMapping: { date_col: 'date', close_col: 'close' },
+          dualSource: {
+            fileId: '33333333-3333-4333-8333-333333333333',
+            columnMapping: { date_col: 'd', close_col: 'c' },
+          },
+        },
+        base.dataSources[1],
+      ],
+    };
+    const parsed = taskConfigSchema.parse(withDual);
+    const spy = parsed.dataSources[0]!;
+    expect(spy.kind).toBe('upload');
+    if (spy.kind === 'upload') expect(spy.dualSource?.fileId).toBe('33333333-3333-4333-8333-333333333333');
+  });
+
+  it('dualSource 缺必填字段时拒绝（ticker 缺 provider）', () => {
+    const bad = {
+      ...base,
+      dataSources: [
+        { kind: 'ticker', alias: 'spy', ticker: 'SPY.US', provider: 'yahoo', dualSource: {} },
+        base.dataSources[1],
+      ],
+    };
+    expect(() => taskConfigSchema.parse(bad)).toThrow();
+  });
 });
 
 describe('上传文件契约', () => {

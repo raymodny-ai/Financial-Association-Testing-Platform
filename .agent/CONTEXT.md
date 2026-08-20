@@ -28,6 +28,7 @@
 | 退化窗口（skipped） | 窗口内零方差/剪枝后不足 2×2/零跨度等前提不满足时不产出结果行，原因记入 skipped（PRD：警告而非静默）。 |
 | 审计（auditSeries） | PRD 模块 J 六类：缺失值/重复索引/缺失交易日（日期索引存在性口径）/stale run（≥3 同值）/跳点（阈值主规则，零命中降级 MAD 兜底）/复权差异；输出 auditRow 9 字段 + notes + 双源同质性。 |
 | 双源一致率 | 主序列等频三分箱阈值对两源共享日期分箱，状态相同占比；同质性走 chiSquareHomogeneity；单源为 1。 |
+| 双源一致性审计接入（dualSource，G3） | PRD 模块 J/用例 4 接通：dataSourceSchema 可选 dualSource（ticker→第二 provider；upload→第二 fileId+映射）；编排层装载第二源（不入分析面板）注入 auditSeries.dualSource；一致率低于 sourceMatchRatioWarn → warn；同质性卡方结论（含 α 显著性判定）由编排层写入 notes → 传导 LLM audit_key_findings；前端向导数据源步可选第二提供方（与主源互斥）。 |
 | 审计状态判定 | missingRatio ≥ fail 阈 → fail；≥ warn 阈/有跳点/有 stale/一致率低于阈 → warn；否则 pass。 |
 | 滞后扫描（lagScan） | PRD 模块 H（G1/G2）：lag=k（k>0）= x 领先 y k 期（x[0..n-1-k]↔y[k..n-1]），k<0 对称；扫描 [-maxLag,+maxLag] 全整数 lag 的 Pearson r/p/n，bestLag=最大 abs(r)（并列取 abs(lag) 更小）；退化切片（零方差）跳过不中断，全退化抛 RangeError；注意 -0 归一（Object.is 区分 ±0）。 |
 | 滞后行（pearson_lag） | 编排产出：family=continuous、test_name='pearson_lag'、检验期数值切片、单独成批校正；最优 lag 行 notes 标注 abs(r)；DB lag 约束 ±60（迁移 004）；前端按 test_name 分区（兼容负 lag）。 |
@@ -55,7 +56,7 @@
 | packages/schemas | Zod 契约唯一来源（入参/出参/持久化双向校验） | 被 api / analysis-engine / web 消费 |
 | packages/shared | AppError 族（含 DataAdapterError 502） | 被 api / analysis-engine 消费 |
 | packages/ui | 设计 Token 唯一来源（tokens.ts/tokens.css），业务禁硬编码色值字体 | 被 web 消费 |
-| services/api | Express 5 网关。presentation(路由/中间件：workspace+error-handler+security 四件套+同源静态托管) → domain(契约/注册表/提示词渲染/LLM 编排/任务运行编排) → infrastructure(适配器/仓储/迁移/LLM 客户端与提供方解析/logger) | DataProvider 契约（fetchHistory）插件式注册；LlmChatClient 传输契约；RunnerDeps 依赖注入；createApp(AppOptions) 安全基线可注入（rateLimit/cors/bodyLimit/logger）；pg + 手写 SQL 迁移；生产经 tsup 打包（tsup.config.ts，@platform/* 内联） |
+| services/api | Express 5 网关。presentation(路由/中间件：workspace+error-handler+security 四件套+同源静态托管) → domain(契约/注册表/提示词渲染/LLM 编排/任务运行编排：含滞后扫描与 dualSource 双源对账) → infrastructure(适配器/仓储/迁移/LLM 客户端与提供方解析/logger) | DataProvider 契约（fetchHistory）插件式注册；LlmChatClient 传输契约；RunnerDeps 依赖注入；createApp(AppOptions) 安全基线可注入（rateLimit/cors/bodyLimit/logger）；pg + 手写 SQL 迁移；生产经 tsup 打包（tsup.config.ts，@platform/* 内联） |
 | services/analysis-engine | 纯函数分析引擎：管道（T09）→ 卡方族（T10）→ 连续检验（T11）→ 校正（T12）→ 滚动窗口（T13）→ 数据真实性审计（T14）→ LLM 上下文构造（T15）→ 滞后扫描（lag.ts，PRD 模块 H） | 输入 NumericSeries[]/PreparedDataset/数值对/p 值批次/AuditPoint[]/TaskConfig+ResultTable+AuditTable，无 IO、无框架依赖；jstat 为 CJS 包，一律 default 导入（Node ESM 命名导入会 SyntaxError）；jstat.d.ts 经三斜线引用随源文件跨包传播 |
 | apps/web | React + Vite + AntD + tokens.css（禁 Tailwind）：新建分析向导/三栏结果页/历史任务列表；lib/api.ts fetch 封装（credentials:'include'，出参过 Zod 校验）+ lib/export.ts 客户端导出 | 经 /api 调网关；样式一律 tokens.css 变量与语义类，页面补充样式在 app.css（仅引用 Token 变量） |
 | infra/db | PostgreSQL 免管理员部署脚本 + 迁移 SQL（001 tasks/result_rows/audit_rows、002 uploaded_files、003 llm_artifacts、004 lag 约束放宽至 ±60） | migrate.ts 运行器（schema_migrations 记账）；start/stop-postgres.ps1 必须 UTF-8 带 BOM（PowerShell 5.1 无 BOM 时中文注释破坏解析） |

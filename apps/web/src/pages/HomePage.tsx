@@ -35,6 +35,8 @@ interface DraftSource {
   alias: string;
   ticker: string;
   provider: 'yahoo' | 'stooq';
+  /** 双源一致性审计第二提供方（PRD 模块 J）；空串 = 未启用 */
+  dualProvider: '' | 'yahoo' | 'stooq';
   fileId?: string;
   filename?: string;
   columns: string[];
@@ -53,6 +55,7 @@ function newDraftSource(): DraftSource {
     alias: `S${sourceSeq}`,
     ticker: '',
     provider: 'yahoo',
+    dualProvider: '',
     columns: [],
     uploading: false,
   };
@@ -150,7 +153,14 @@ export default function HomePage() {
       workspaceId: PLACEHOLDER_WORKSPACE_ID,
       dataSources: sources.map((s) =>
         s.kind === 'ticker'
-          ? { kind: 'ticker', alias: s.alias.trim(), ticker: s.ticker.trim(), provider: s.provider }
+          ? {
+              kind: 'ticker',
+              alias: s.alias.trim(),
+              ticker: s.ticker.trim(),
+              provider: s.provider,
+              // 双源一致性审计（PRD 模块 J）：同 ticker 第二提供方，仅供审计对账
+              ...(s.dualProvider !== '' ? { dualSource: { provider: s.dualProvider } } : {}),
+            }
           : {
               kind: 'upload',
               alias: s.alias.trim(),
@@ -282,10 +292,23 @@ export default function HomePage() {
                               <Select
                                 value={s.provider}
                                 style={{ width: '100%' }}
-                                onChange={(value) => patchSource(s.key, { provider: value })}
+                                onChange={(value) => patchSource(s.key, { provider: value, dualProvider: '' })}
                                 options={[
                                   { label: 'Yahoo Finance（主力）', value: 'yahoo' },
                                   { label: 'Stooq（休眠备用）', value: 'stooq' },
+                                ]}
+                              />
+                            </div>
+                            <div>
+                              <span className="field-label">双源审计（第二提供方）</span>
+                              <Select
+                                value={s.dualProvider}
+                                style={{ width: '100%' }}
+                                onChange={(value) => patchSource(s.key, { dualProvider: value })}
+                                options={[
+                                  { label: '不启用', value: '' },
+                                  { label: 'Yahoo Finance', value: 'yahoo', disabled: s.provider === 'yahoo' },
+                                  { label: 'Stooq', value: 'stooq', disabled: s.provider === 'stooq' },
                                 ]}
                               />
                             </div>
@@ -535,7 +558,7 @@ export default function HomePage() {
                   column={2}
                   items={[
                     { key: 'project', label: '项目名称', children: projectName },
-                    { key: 'sources', label: '数据源', children: sources.map((s) => `${s.alias}（${s.kind === 'ticker' ? s.ticker : s.filename ?? 'CSV'}）`).join('、') },
+                    { key: 'sources', label: '数据源', children: sources.map((s) => `${s.alias}（${s.kind === 'ticker' ? s.ticker : s.filename ?? 'CSV'}${s.kind === 'ticker' && s.dualProvider !== '' ? `，双源审计:${s.dualProvider}` : ''}）`).join('、') },
                     { key: 'range', label: '样本区间', children: `${startDate?.format(DATE_FORMAT) ?? ''} ~ ${endDate?.format(DATE_FORMAT) ?? ''}` },
                     { key: 'periods', label: '参考期 / 检验期', children: `${referenceStart?.format(DATE_FORMAT) ?? ''} ~ ${referenceEnd?.format(DATE_FORMAT) ?? ''} / ${testStart?.format(DATE_FORMAT) ?? ''} ~ ${testEnd?.format(DATE_FORMAT) ?? ''}` },
                     { key: 'binning', label: '分箱', children: `${binningMethod} × ${bins} 桶` },

@@ -136,10 +136,11 @@ function extractUploadSeries(
 export async function runAnalysis(config: TaskConfig, deps: RunnerDeps): Promise<AnalysisOutcome> {
   const runId = randomUUID();
 
-  // 1. 数据加载
+  // 1. 数据加载（dualSource 第二源仅供双源审计对账，不进入分析面板；PRD 模块 J）
   const rawSeries: NumericSeries[] = [];
   const auditPointsByAlias = new Map<string, AuditPoint[]>();
   const adjustedByAlias = new Map<string, Array<{ date: string; value: number }>>();
+  const dualPointsByAlias = new Map<string, AuditPoint[]>();
   for (const ds of config.dataSources) {
     if (ds.kind === 'ticker') {
       const panel = await deps.fetchHistory(ds.provider, ds.ticker, {
@@ -151,10 +152,28 @@ export async function runAnalysis(config: TaskConfig, deps: RunnerDeps): Promise
         ds.alias,
         panel.points.map((p) => ({ date: p.date, value: p.close })),
       );
+      if (ds.dualSource !== undefined) {
+        const dual = await deps.fetchHistory(ds.dualSource.provider, ds.ticker, {
+          start: config.startDate,
+          end: config.endDate,
+          frequency: config.frequency,
+        });
+        dualPointsByAlias.set(
+          ds.alias,
+          dual.points.map((p) => ({ date: p.date, value: p.close })),
+        );
+      }
     } else {
       const { points, adjusted } = extractUploadSeries(await deps.readFileContent(ds.fileId), ds.columnMapping);
       auditPointsByAlias.set(ds.alias, points);
       if (adjusted.length > 0) adjustedByAlias.set(ds.alias, adjusted);
+      if (ds.dualSource !== undefined) {
+        const dual = extractUploadSeries(
+          await deps.readFileContent(ds.dualSource.fileId),
+          ds.dualSource.columnMapping,
+        );
+        dualPointsByAlias.set(ds.alias, dual.points);
+      }
     }
     const points = auditPointsByAlias.get(ds.alias)!;
     rawSeries.push({
@@ -284,16 +303,24 @@ export async function runAnalysis(config: TaskConfig, deps: RunnerDeps): Promise
     ...finalize(rollingDrafts, runId, config.tests.correction, config.tests.alpha),
   ];
 
-  // 8. 数据真实性审计（每个原始数据源；双源对账待任务配置支持，见 N14）
+  // 8. 数据真实性审计（每个原始数据源；配置了 dualSource 的源附加双源一致性对账，PRD 模块 J）
   const audit: AuditRow[] = [];
   const auditNotes: Record<string, string[]> = {};
   for (const [alias, points] of auditPointsByAlias) {
+    const dualPoints = dualPointsByAlias.get(alias);
     const report = auditSeries({
       alias,
       points,
       thresholds: config.audit,
       adjustedPoints: adjustedByAlias.get(alias),
+      dualSource: dualPoints !== undefined ? { alias: `${alias}·第二源`, points: dualPoints } : undefined,
     });
+    // 同质性检验结论入风险说明（引擎不持有 alpha，显著性判定在编排层）
+    if (report.homogeneity !== null) {
+      const h = report.homogeneity;
+      const verdict = h.pValue < config.tests.alpha ? '两源分布显著不同，口径差异需排查' : '两源分布未见显著差异';
+      report.notes.push(`双源同质性卡方=${h.statistic.toFixed(2)}（p=${h.pValue.toExponential(2)}）：${verdict}`);
+    }
     audit.push(report.row);
     auditNotes[alias] = report.notes;
   }

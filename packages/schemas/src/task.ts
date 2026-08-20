@@ -15,6 +15,11 @@ import {
   idSchema,
 } from './common';
 
+/** 字段映射：标准列名 → 文件列名（至少一组） */
+const columnMappingSchema = z
+  .record(z.string(), z.string())
+  .refine((m) => Object.keys(m).length > 0, '字段映射不得为空');
+
 /** 数据源条目：ticker 拉取或 CSV 上传映射 */
 export const dataSourceSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -25,6 +30,8 @@ export const dataSourceSchema = z.discriminatedUnion('kind', [
     ticker: z.string().min(1).max(32),
     /** 数据源标识，用于审计与可复现性 */
     provider: z.string().min(1),
+    /** 双源一致性审计第二源（PRD 模块 J）：同 ticker 的另一 provider，仅供审计对账，不进入分析面板 */
+    dualSource: z.object({ provider: z.string().min(1) }).optional(),
   }),
   z.object({
     kind: z.literal('upload'),
@@ -32,9 +39,14 @@ export const dataSourceSchema = z.discriminatedUnion('kind', [
     /** 上传文件引用 id */
     fileId: idSchema,
     /** 字段映射：标准列名 → 文件列名（至少一组） */
-    columnMapping: z
-      .record(z.string(), z.string())
-      .refine((m) => Object.keys(m).length > 0, '字段映射不得为空'),
+    columnMapping: columnMappingSchema,
+    /** 双源一致性审计第二源（PRD 模块 J）：另一上传文件，仅供审计对账，不进入分析面板 */
+    dualSource: z
+      .object({
+        fileId: idSchema,
+        columnMapping: columnMappingSchema,
+      })
+      .optional(),
   }),
 ]);
 export type DataSource = z.infer<typeof dataSourceSchema>;
