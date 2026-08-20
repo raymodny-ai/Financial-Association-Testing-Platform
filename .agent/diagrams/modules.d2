@@ -44,7 +44,7 @@ apps: {
 
 infra: {
   db: "infra/db\n迁移 SQL（004 lag ±60、005 run_panels 导出面板快照、006 config_templates 分析模板）+ 本地 PostgreSQL 启停脚本"
-  deploy: "render.yaml + docs/DEPLOY.md + .github/workflows/ci.yml\nT20 Render Blueprint 同源单服务 + free PG + GitHub Actions CI"
+  deploy: "render.yaml + docs/DEPLOY.md（含 G9 free PG 到期迁移双路径）+ .github/workflows/ci.yml\nT20 Render Blueprint 同源单服务 + free PG + GitHub Actions CI"
 }
 
 prompts: "prompts/\nLLM 模板 + output_schema.json（T16 loadPromptAssets 消费；G8 loadOutputSchema 与 llmOutputSchema 对拍守卫）"

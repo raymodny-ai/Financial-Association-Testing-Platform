@@ -57,7 +57,43 @@
   `Access-Control-Allow-Headers` 已包含 x-filename）。
 - **限流单实例内存计数（N17）**：`rateLimiter` 按进程内 Map 计数，
   Render free 单实例下成立；横向扩容后需换 Redis 等共享存储。
-- **free PostgreSQL 生命周期**：Render free 数据库有 90 天试用期，
-  到期前需升级付费实例或导出数据（`pg_dump`）。
+- **free PostgreSQL 生命周期**：Render free 数据库有 90 天试用期，到期处理见下节。
 - **free web 服务冷启动**：约 50s 空闲后休眠，首请求有冷启动延迟；
   分析运行（含 LLM）最长约 2 分钟，在 Render 请求超时上限内。
+
+## free PostgreSQL 到期迁移路径（G9）
+
+Render free PostgreSQL 有 **90 天试用期**，到期后数据库进入只读保护（连接仍可用但拒写）。
+应用对 PostgreSQL 的依赖仅为标准 SQL + pg 驱动（无扩展、无存储过程），
+故迁移只需换连接串，无需改代码。建议到期前 1~2 周启动以下流程。
+
+### 前置：备份（两条路径通用）
+
+```bash
+# 在 Render Dashboard → fap-db → Connect 获取 External Database URL
+pg_dump "<EXTERNAL_DATABASE_URL>" --no-owner --no-privileges -F p -f fap-backup.sql
+# 验证备份可读（可选）：psql -f fap-backup.sql 到本地临时库
+```
+
+### 路径 A：升级 Render 付费 PostgreSQL（最省事）
+
+1. Dashboard → `fap-db` → Settings → **Upgrade plan**（Starter 起，按月计费）。
+2. 升级不改变 `DATABASE_URL`，`fap-platform` 无需改环境变量，自动重连即生效。
+3. 数据原地保留，无需导入导出；升级后 90 天倒计时解除。
+
+### 路径 B：迁移到 Supabase free 层（继续零成本）
+
+1. Supabase Dashboard 新建项目，记录 Connection string（URI 格式，含密码）。
+2. 导入备份：`psql "<SUPABASE_CONNECTION_STRING>" -f fap-backup.sql`。
+   （`schema_migrations` 表随备份一并迁入，`migrate.js` 幂等记账不会重跑已应用迁移。）
+3. Render → `fap-platform` → Environment：把 `DATABASE_URL` 从 fromDatabase 引用改为
+   手填 Supabase 连接串（若平台要求 SSL，追加 `?sslmode=require`）。
+4. 手动重新部署，验证 `GET /api/health` 与历史任务列表可读。
+5. 确认无误后在 Render 删除 `fap-db`（同时从 render.yaml 的 databases 段移除，
+   避免下次 Blueprint Apply 重建）。
+
+### 到期后应急（已进只读保护）
+
+只读状态下 `pg_dump` 仍可用，备份流程不变；先导出再选路径 A/B。
+本地开发库（`infra/db` 脚本起的 PostgreSQL 16）不受此限制，
+随时可用 `migrate.js` + 备份重建。

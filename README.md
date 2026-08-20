@@ -151,7 +151,7 @@ https://dashboard.render.com/blueprint/new?repo=https://github.com/raymodny-ai/F
 
 - ~~web 主 chunk 1.3MB（待代码分割）~~（已闭：vendor 分割 + 路由懒加载，入口壳 4.5kB）
 - CSV 上传源的第二文件双源审计 UI · 派生序列编辑 UI · 交易所节假日日历
-- Render free PostgreSQL 90 天试用期提醒
+- ~~Render free PostgreSQL 90 天试用期提醒~~（已闭：docs/DEPLOY.md 已给出备份 + 付费层升级 + Supabase 迁移双路径）
 
 ---
 
