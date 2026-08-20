@@ -215,6 +215,37 @@ describe('分析模板契约（G6，PRD 配置设计）', () => {
   });
 });
 
+describe('taskConfigSchema researchQuestion（G13，PRD 模块 K 输入要求，关 N12）', () => {
+  const base = {
+    projectName: '研究问题',
+    workspaceId: '22222222-2222-4222-8222-222222222222',
+    dataSources: [
+      { kind: 'ticker', alias: 'A', ticker: 'AAA', provider: 'yahoo' },
+      { kind: 'ticker', alias: 'B', ticker: 'BBB', provider: 'yahoo' },
+    ],
+    startDate: '2020-01-01',
+    endDate: '2024-12-31',
+    periods: {
+      referenceStart: '2020-01-01',
+      referenceEnd: '2022-12-31',
+      testStart: '2023-01-01',
+      testEnd: '2024-12-31',
+    },
+  };
+
+  it('接受可选研究问题；缺省时不填充（由引擎按 projectName 派生）', () => {
+    expect(taskConfigSchema.parse({ ...base, researchQuestion: '涨跌状态是否联动？' }).researchQuestion).toBe(
+      '涨跌状态是否联动？',
+    );
+    expect(taskConfigSchema.parse(base).researchQuestion).toBeUndefined();
+  });
+
+  it('拒绝空白与超过 512 字符的研究问题', () => {
+    expect(taskConfigSchema.safeParse({ ...base, researchQuestion: '  ' }).success).toBe(false);
+    expect(taskConfigSchema.safeParse({ ...base, researchQuestion: '问'.repeat(513) }).success).toBe(false);
+  });
+});
+
 describe('上传文件契约', () => {
   it('uploadedFileSchema 含元数据字段且拒绝空列', () => {
     expect(Object.keys(uploadedFileSchema.shape)).toEqual([

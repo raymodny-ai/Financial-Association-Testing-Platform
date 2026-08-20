@@ -116,6 +116,8 @@ export default function HomePage() {
   const [step, setStep] = useState(0);
 
   const [projectName, setProjectName] = useState('');
+  /** 研究问题（G13，PRD 模块 K 输入要求）；可选，缺省由 LLM 按项目名派生 */
+  const [researchQuestion, setResearchQuestion] = useState('');
   const [sources, setSources] = useState<DraftSource[]>([newDraftSource(), newDraftSource()]);
   /** 派生序列（G11：由基础序列经收益率/差分派生，参与后续全部检验） */
   const [derived, setDerived] = useState<DerivedSeries[]>([]);
@@ -247,6 +249,8 @@ export default function HomePage() {
     const fmt = (d: Dayjs | null): string => (d === null ? '' : d.format(DATE_FORMAT));
     return {
       projectName: projectName.trim(),
+      // G13：可选研究问题，非空才写入（契约 optional，缺省由引擎派生）
+      ...(researchQuestion.trim() !== '' ? { researchQuestion: researchQuestion.trim() } : {}),
       workspaceId: PLACEHOLDER_WORKSPACE_ID,
       dataSources: sources.map((s) =>
         s.kind === 'ticker'
@@ -310,7 +314,7 @@ export default function HomePage() {
 
   const parsed = useMemo(() => taskConfigSchema.safeParse(buildConfig()), [
     // 预览步刷新时机：进入第 4 步或点击运行时重算即可，此处保持轻量依赖
-    step, sources, derived, projectName, startDate, endDate, frequency,
+    step, sources, derived, researchQuestion, projectName, startDate, endDate, frequency,
     referenceStart, referenceEnd, testStart, testEnd,
     binningMethod, bins, rollingEnabled, windowDays, stepDays, minSamples, rollingMethods,
     alpha, correction, permutations, maxLag,
@@ -346,6 +350,7 @@ export default function HomePage() {
 
   function applyConfig(config: TaskConfig, filesById: Map<string, UploadedFile>): void {
     setProjectName(config.projectName);
+    setResearchQuestion(config.researchQuestion ?? '');
     setStartDate(dayjs(config.startDate));
     setEndDate(dayjs(config.endDate));
     setFrequency(config.frequency);
@@ -502,6 +507,18 @@ export default function HomePage() {
                     onChange={(e) => setProjectName(e.target.value)}
                     placeholder="例如：沪深 300 与标普 500 关联性检验"
                     maxLength={128}
+                  />
+                </div>
+                <div>
+                  {/* G13：PRD 模块 K 输入要求「用户问题与研究目的」，传导至 LLM 上下文 */}
+                  <span className="field-label">研究问题（可选：缺省时 LLM 按项目名派生）</span>
+                  <Input.TextArea
+                    value={researchQuestion}
+                    onChange={(e) => setResearchQuestion(e.target.value)}
+                    placeholder="例如：两市场涨跌状态是否存在领先滞后关系？"
+                    maxLength={512}
+                    rows={2}
+                    showCount
                   />
                 </div>
                 <div>
@@ -981,6 +998,7 @@ export default function HomePage() {
                   column={2}
                   items={[
                     { key: 'project', label: '项目名称', children: projectName },
+                    { key: 'question', label: '研究问题', children: researchQuestion.trim() === '' ? '未指定（由项目名派生）' : researchQuestion.trim() },
                     { key: 'sources', label: '数据源', children: sources.map((s) => `${s.alias}（${s.kind === 'ticker' ? s.ticker : s.filename ?? 'CSV'}${s.kind === 'ticker' && s.dualProvider !== '' ? `，双源审计:${s.dualProvider}` : ''}${s.kind === 'upload' && s.dualFileId !== undefined ? `，双源审计:${s.dualFilename ?? 'CSV'}` : ''}）`).join('、') },
                     { key: 'derived', label: '派生序列', children: derived.length === 0 ? '无' : derived.map((d) => `${d.alias} ← ${d.sourceAlias}（${TRANSFORM_OPTIONS.find((t) => t.value === d.transform)?.label ?? d.transform}）`).join('、') },
                     { key: 'range', label: '样本区间', children: `${startDate?.format(DATE_FORMAT) ?? ''} ~ ${endDate?.format(DATE_FORMAT) ?? ''}` },

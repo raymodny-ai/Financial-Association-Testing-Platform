@@ -40,7 +40,7 @@ export const FORBIDDEN_CLAIMS = [
 
 export interface LlmContextInput {
   config: TaskConfig;
-  /** 用户研究问题；缺省时由 projectName 派生（N12：taskConfigSchema 暂无该字段） */
+  /** 用户研究问题；缺省时由 projectName 派生（G13 起由编排层从 config.researchQuestion 透传） */
   researchQuestion?: string;
   /** 主结果长表：window_end 非空 = 滚动行，lag≠0 = 滞后行，其余为全样本行 */
   results: readonly ResultRow[];

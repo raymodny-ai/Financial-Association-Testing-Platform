@@ -114,7 +114,7 @@ pnpm --filter @platform/web dev
 ## ✅ 常用命令
 
 ```bash
-pnpm test                # 全仓测试（5 包共 261 例）
+pnpm test                # 全仓测试（5 包共 264 例）
 pnpm typecheck           # 全仓 TypeScript 严格检查
 pnpm lint                # ESLint
 pnpm build               # 全仓构建（web: vite / api: tsup）

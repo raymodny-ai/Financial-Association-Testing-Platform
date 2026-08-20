@@ -72,6 +72,6 @@ describe('output_schema.json ↔ llmOutputSchema 一致性', () => {
   it('禁止额外字段：additionalProperties=false 且 confidence_level 限 high/medium/low', () => {
     const schema = loadOutputSchema();
     expect(schema.additionalProperties).toBe(false);
-    expect(schema.properties.confidence_level.enum).toEqual(['high', 'medium', 'low']);
+    expect(schema.properties.confidence_level?.enum).toEqual(['high', 'medium', 'low']);
   });
 });

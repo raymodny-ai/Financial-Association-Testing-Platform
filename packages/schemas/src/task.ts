@@ -142,6 +142,8 @@ export const taskConfigSchema = z
     endDate: dateSchema,
     /** 频率 */
     frequency: frequencySchema.default('daily'),
+    /** 用户研究问题（G13，PRD 模块 K 输入要求）；缺省时 LLM 上下文由 projectName 派生 */
+    researchQuestion: z.string().trim().min(1).max(512).optional(),
     /** 派生序列定义 */
     derivedSeries: z.array(derivedSeriesSchema).default([]),
     /** 参考期 / 检验期 */

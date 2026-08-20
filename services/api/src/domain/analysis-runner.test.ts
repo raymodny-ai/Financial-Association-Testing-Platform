@@ -170,6 +170,12 @@ describe('runAnalysis · 全链路（注入 fake 依赖）', () => {
     expect(outcome.llm.context).toEqual(interpretCalls[0]!.context);
   });
 
+  it('researchQuestion 透传（G13，关 N12）：配置显式研究问题优先写入 LLM 上下文', async () => {
+    const { deps, interpretCalls } = fakeDeps();
+    await runAnalysis({ ...baseConfig, researchQuestion: '两市场涨跌状态是否存在领先滞后关系？' }, deps);
+    expect(interpretCalls[0]!.context.research_question).toBe('两市场涨跌状态是否存在领先滞后关系？');
+  });
+
   it('滞后分析（PRD 模块 H）：maxLag>0 时产出 [-maxLag,+maxLag] 全扫描行并标注最优 lag', async () => {
     const config: TaskConfig = {
       ...baseConfig,

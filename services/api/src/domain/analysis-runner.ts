@@ -359,6 +359,8 @@ export async function runAnalysis(config: TaskConfig, deps: RunnerDeps): Promise
   // 10. LLM 上下文 + 推理（缺密钥降级 skipped，失败不阻塞统计结果）
   const context = buildLlmContext({
     config,
+    // G13：用户显式研究问题优先（缺省由引擎按 projectName 派生，关 N12）
+    researchQuestion: config.researchQuestion,
     results,
     rollingSkippedCount,
     audit,

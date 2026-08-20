@@ -334,6 +334,13 @@ export default function ResultsPage() {
           <div className="rail-card">
             <h3 className="rail-card-title">配置摘要</h3>
             <div className="config-summary">
+              {/* G13：显式研究问题非缺省时展示（LLM 上下文同字段） */}
+              {config.researchQuestion !== undefined && (
+                <div>
+                  <div className="config-summary-label">研究问题</div>
+                  <div className="config-summary-value">{config.researchQuestion}</div>
+                </div>
+              )}
               <div>
                 <div className="config-summary-label">样本区间</div>
                 <div className="config-summary-value font-data">{config.startDate} ~ {config.endDate}</div>
