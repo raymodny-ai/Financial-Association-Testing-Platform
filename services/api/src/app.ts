@@ -6,6 +6,7 @@ import type { Logger } from './infrastructure/logger.js';
 import { healthRouter } from './presentation/routes/health.js';
 import { tasksRouter } from './presentation/routes/tasks.js';
 import { filesRouter } from './presentation/routes/files.js';
+import { templatesRouter } from './presentation/routes/templates.js';
 import { workspaceMiddleware } from './presentation/middleware/workspace.js';
 import { errorHandler } from './presentation/middleware/error-handler.js';
 import { mountWebStatic } from './presentation/static.js';
@@ -61,6 +62,7 @@ export function createApp(options: AppOptions = {}): Express {
   app.use('/api/health', healthRouter);
   app.use('/api/tasks', tasksRouter);
   app.use('/api/files', filesRouter);
+  app.use('/api/templates', templatesRouter);
 
   // T20：同源托管 web 产物（WEB_DIST_DIR 未设置 → 纯 API 模式）
   mountWebStatic(app);

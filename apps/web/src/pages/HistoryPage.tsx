@@ -67,7 +67,7 @@ export default function HistoryPage() {
     },
     {
       title: '操作',
-      width: 200,
+      width: 280,
       render: (_: unknown, record: TaskRecord) => (
         <Space>
           <Button
@@ -85,6 +85,10 @@ export default function HistoryPage() {
             onClick={() => rerun.mutate(record.id)}
           >
             重新运行
+          </Button>
+          {/* PRD 配置设计：复制分析 = 同配置预填向导，可调整后重跑 */}
+          <Button size="small" onClick={() => navigate(`/?clone=${record.id}`)}>
+            复制分析
           </Button>
         </Space>
       ),

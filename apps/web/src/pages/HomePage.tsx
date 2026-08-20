@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Alert,
   Button,
@@ -9,6 +9,8 @@ import {
   Divider,
   Input,
   InputNumber,
+  Modal,
+  Popconfirm,
   Radio,
   Select,
   Space,
@@ -19,9 +21,26 @@ import {
 } from 'antd';
 import { PlusOutlined, UploadOutlined } from '@ant-design/icons';
 import type { UploadFile } from 'antd';
+import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
-import { DEFAULTS, taskConfigSchema, type RollingMethod } from '@platform/schemas';
-import { createTask, runTask, uploadCsv } from '../lib/api';
+import {
+  DEFAULTS,
+  taskConfigSchema,
+  type AnalysisTemplate,
+  type RollingMethod,
+  type TaskConfig,
+  type UploadedFile,
+} from '@platform/schemas';
+import {
+  createTask,
+  deleteTemplate,
+  getTask,
+  listFiles,
+  listTemplates,
+  runTask,
+  saveTemplate,
+  uploadCsv,
+} from '../lib/api';
 
 /** G5：workspaceId 由服务端 Cookie 注入并覆盖，客户端 safeParse 仅占位校验 */
 const PLACEHOLDER_WORKSPACE_ID = '00000000-0000-0000-0000-000000000000';
@@ -73,6 +92,8 @@ const ROLLING_METHOD_OPTIONS: Array<{ value: RollingMethod; label: string }> = [
 
 export default function HomePage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const cloneTaskId = searchParams.get('clone');
   const [step, setStep] = useState(0);
 
   const [projectName, setProjectName] = useState('');
@@ -103,6 +124,17 @@ export default function HomePage() {
 
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  /* ---------------- 分析模板（G6：保存模板 / 复制分析） ---------------- */
+
+  const [templates, setTemplates] = useState<AnalysisTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [saveModalOpen, setSaveModalOpen] = useState(false);
+  const [templateName, setTemplateName] = useState('');
+
+  useEffect(() => {
+    void listTemplates().then(setTemplates).catch(() => undefined);
+  }, []);
 
   function patchSource(key: string, patch: Partial<DraftSource>): void {
     setSources((prev) => prev.map((s) => (s.key === key ? { ...s, ...patch } : s)));
@@ -242,6 +274,105 @@ export default function HomePage() {
     }
   }
 
+  /* ---------------- 模板加载：TaskConfig → 向导草稿状态 ---------------- */
+
+  function applyConfig(config: TaskConfig, filesById: Map<string, UploadedFile>): void {
+    setProjectName(config.projectName);
+    setStartDate(dayjs(config.startDate));
+    setEndDate(dayjs(config.endDate));
+    setFrequency(config.frequency);
+    setReferenceStart(dayjs(config.periods.referenceStart));
+    setReferenceEnd(dayjs(config.periods.referenceEnd));
+    setTestStart(dayjs(config.periods.testStart));
+    setTestEnd(dayjs(config.periods.testEnd));
+    setBinningMethod(config.binning.method);
+    setBins(config.binning.bins);
+    setRollingEnabled(config.rolling.enabled);
+    setWindowDays(config.rolling.windowDays);
+    setStepDays(config.rolling.stepDays);
+    setMinSamples(config.rolling.minSamples ?? null);
+    setRollingMethods(config.rolling.methods ?? ROLLING_METHOD_OPTIONS.map((o) => o.value));
+    setAlpha(config.tests.alpha);
+    setCorrection(config.tests.correction);
+    setPermutations(config.tests.permutations);
+    setMaxLag(config.maxLag);
+    setSources(
+      config.dataSources.map((ds) => {
+        if (ds.kind === 'ticker') {
+          return {
+            ...newDraftSource(),
+            kind: 'ticker',
+            alias: ds.alias,
+            ticker: ds.ticker,
+            provider: ds.provider === 'stooq' ? 'stooq' : 'yahoo',
+            dualProvider: ds.dualSource?.provider === 'stooq' ? 'stooq' : ds.dualSource?.provider === 'yahoo' ? 'yahoo' : '',
+          };
+        }
+        const file = filesById.get(ds.fileId);
+        return {
+          ...newDraftSource(),
+          kind: 'upload',
+          alias: ds.alias,
+          fileId: ds.fileId,
+          filename: file?.filename ?? '（文件已删除）',
+          columns: file?.columns ?? [],
+          dateCol: ds.columnMapping.date_col,
+          closeCol: ds.columnMapping.close_col,
+          adjCloseCol: ds.columnMapping.adj_close_col,
+        };
+      }),
+    );
+  }
+
+  async function loadTemplate(template: AnalysisTemplate): Promise<void> {
+    try {
+      const files = await listFiles();
+      applyConfig(template.config, new Map(files.map((f) => [f.id, f])));
+      message.success(`已载入模板「${template.name}」，请核对后运行`);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '模板载入失败');
+    }
+  }
+
+  async function handleSaveTemplate(): Promise<void> {
+    if (!parsed.success) return;
+    const name = templateName.trim() === '' ? projectName : templateName.trim();
+    try {
+      await saveTemplate(name, parsed.data);
+      setTemplates(await listTemplates());
+      setSaveModalOpen(false);
+      setTemplateName('');
+      message.success(`模板「${name}」已保存`);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '模板保存失败');
+    }
+  }
+
+  async function handleDeleteTemplate(templateId: string): Promise<void> {
+    try {
+      await deleteTemplate(templateId);
+      setTemplates(await listTemplates());
+      message.success('模板已删除');
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '模板删除失败');
+    }
+  }
+
+  /* 复制分析（PRD）：?clone=<taskId> 预填同配置后可编辑重跑 */
+  useEffect(() => {
+    if (cloneTaskId === null) return;
+    void (async () => {
+      try {
+        const [task, files] = await Promise.all([getTask(cloneTaskId), listFiles()]);
+        applyConfig(task.config, new Map(files.map((f) => [f.id, f])));
+        message.success(`已载入任务「${task.config.projectName}」的配置，可调整后运行`);
+      } catch (error) {
+        message.error(error instanceof Error ? error.message : '任务配置载入失败');
+      }
+    })();
+    // 仅首次挂载执行一次（clone 参数不变时不重复拉取）
+  }, [cloneTaskId]);
+
   /* ---------------- 渲染 ---------------- */
 
   return (
@@ -253,6 +384,36 @@ export default function HomePage() {
           {step === 0 && (
             <div>
               <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                {templates.length > 0 && (
+                  <div>
+                    <span className="field-label">分析模板（一键载入已保存配置）</span>
+                    <Space.Compact style={{ width: '100%' }}>
+                      <Select<string>
+                        style={{ width: '100%' }}
+                        placeholder="选择模板后自动填充全部配置"
+                        value={selectedTemplateId}
+                        options={templates.map((t) => ({ value: t.id, label: t.name }))}
+                        onChange={(id) => {
+                          setSelectedTemplateId(id);
+                          const t = templates.find((x) => x.id === id);
+                          if (t !== undefined) void loadTemplate(t);
+                        }}
+                      />
+                      <Popconfirm
+                        title="删除选中的模板？"
+                        disabled={selectedTemplateId === null}
+                        onConfirm={() => {
+                          if (selectedTemplateId !== null) {
+                            void handleDeleteTemplate(selectedTemplateId);
+                            setSelectedTemplateId(null);
+                          }
+                        }}
+                      >
+                        <Button danger disabled={selectedTemplateId === null}>删除选中</Button>
+                      </Popconfirm>
+                    </Space.Compact>
+                  </div>
+                )}
                 <div>
                   <span className="field-label">项目名称</span>
                   <Input
@@ -607,9 +768,22 @@ export default function HomePage() {
                     { key: 'rolling', label: '滚动窗口', children: rollingEnabled ? `${windowDays} 日 / 步长 ${stepDays}${minSamples !== null ? ` / 最小样本 ${minSamples}` : ''} / ${rollingMethods.length} 法` : '关闭' },
                   ]}
                 />
-                <Button type="primary" size="large" disabled={!parsed.success} onClick={() => void handleSubmit()}>
-                  创建并运行分析
-                </Button>
+                <Space>
+                  <Button type="primary" size="large" disabled={!parsed.success} onClick={() => void handleSubmit()}>
+                    创建并运行分析
+                  </Button>
+                  {/* PRD 配置设计：保存模板（同配置可复用） */}
+                  <Button
+                    size="large"
+                    disabled={!parsed.success}
+                    onClick={() => {
+                      setTemplateName(projectName);
+                      setSaveModalOpen(true);
+                    }}
+                  >
+                    保存为模板
+                  </Button>
+                </Space>
               </Space>
             </Spin>
           )}
@@ -629,6 +803,24 @@ export default function HomePage() {
           </div>
         </div>
       </Card>
+
+      {/* 保存模板弹窗（PRD 配置设计：模板名缺省取项目名） */}
+      <Modal
+        title="保存分析模板"
+        open={saveModalOpen}
+        onOk={() => void handleSaveTemplate()}
+        onCancel={() => setSaveModalOpen(false)}
+        okText="保存"
+        cancelText="取消"
+      >
+        <span className="field-label">模板名称</span>
+        <Input
+          value={templateName}
+          maxLength={64}
+          placeholder="缺省使用项目名称"
+          onChange={(e) => setTemplateName(e.target.value)}
+        />
+      </Modal>
     </div>
   );
 }

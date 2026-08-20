@@ -9,10 +9,12 @@ import {
   resultTableSchema,
   auditTableSchema,
   exportPanelSchema,
+  analysisTemplateSchema,
   llmContextSchema,
   llmOutputSchema,
   llmTraceSchema,
   uploadedFileSchema,
+  type AnalysisTemplate,
   type TaskConfig,
   type TaskRecord,
   type ResultRow,
@@ -73,6 +75,11 @@ export function listTasks(): Promise<TaskRecord[]> {
   return request<{ items: unknown[] }>('/tasks').then((raw) =>
     raw.items.map((item) => taskRecordSchema.parse(item)),
   );
+}
+
+/** 单任务查询（G6 复制分析：预填向导需要任务配置） */
+export function getTask(taskId: string): Promise<TaskRecord> {
+  return request<unknown>(`/tasks/${taskId}`).then((raw) => taskRecordSchema.parse(raw));
 }
 
 export interface TaskRunOutcome {
@@ -159,4 +166,37 @@ export function listFiles(): Promise<UploadedFile[]> {
   return request<{ items: unknown[] }>('/files').then((raw) =>
     raw.items.map((item) => uploadedFileSchema.parse(item)),
   );
+}
+
+/* ------------------------------------------------------------------ */
+/* 分析模板（G6：PRD「保存模板 / 复制分析 / 重新运行同配置」）     */
+/* ------------------------------------------------------------------ */
+
+export function listTemplates(): Promise<AnalysisTemplate[]> {
+  return request<{ items: unknown[] }>('/templates').then((raw) =>
+    raw.items.map((item) => analysisTemplateSchema.parse(item)),
+  );
+}
+
+export function saveTemplate(name: string, config: TaskConfig): Promise<AnalysisTemplate> {
+  return request<unknown>('/templates', {
+    method: 'POST',
+    body: JSON.stringify({ name, config }),
+  }).then((raw) => analysisTemplateSchema.parse(raw));
+}
+
+export async function deleteTemplate(templateId: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/templates/${templateId}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    const body: unknown = await response.json().catch(() => null);
+    const error = body as { error?: { code?: string; message?: string } } | null;
+    throw new ApiError(
+      response.status,
+      error?.error?.code ?? 'UnknownError',
+      error?.error?.message ?? `删除失败（HTTP ${response.status}）`,
+    );
+  }
 }

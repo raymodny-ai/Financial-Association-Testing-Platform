@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  analysisTemplateSchema,
   auditRowSchema,
+  createTemplateRequestSchema,
   llmContextSchema,
   llmOutputSchema,
   resultRowSchema,
@@ -193,6 +195,23 @@ describe('rollingConfigSchema 滚动窗口透传（G5）', () => {
   it('拒绝空 methods 与未知方法名', () => {
     expect(taskConfigSchema.safeParse({ ...base, rolling: { methods: [] } }).success).toBe(false);
     expect(taskConfigSchema.safeParse({ ...base, rolling: { methods: ['kendall'] } }).success).toBe(false);
+  });
+});
+
+describe('分析模板契约（G6，PRD 配置设计）', () => {
+  it('analysisTemplateSchema 含 id/workspaceId/name/config/createdAt 五字段', () => {
+    expect(Object.keys(analysisTemplateSchema.shape)).toEqual([
+      'id',
+      'workspaceId',
+      'name',
+      'config',
+      'createdAt',
+    ]);
+  });
+
+  it('createTemplateRequestSchema 仅含 name + config（workspaceId 服务端注入）', () => {
+    expect(Object.keys(createTemplateRequestSchema.shape)).toEqual(['name', 'config']);
+    expect(createTemplateRequestSchema.safeParse({ name: '', config: {} }).success).toBe(false);
   });
 });
 
