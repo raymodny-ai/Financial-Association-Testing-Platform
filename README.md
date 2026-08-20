@@ -13,7 +13,7 @@
 | 数据源 | Yahoo Finance 在线行情（主力源，≥1s 限速 + 24h 缓存）、CSV 上传（自定义列映射）、Stooq（休眠备用） |
 | 检验流水线 | 标准化 + 离散化（等频/等宽分箱）→ 成对卡方独立性检验、Student's t、Pearson / Spearman 相关、互信息（置换检验） |
 | 多重检验校正 | Bonferroni / Benjamini-Hochberg / Benjamini-Yekutieli，按族分批 |
-| 滚动窗口 | 可配置窗口长度的时序滚动重算（退化窗口记 skipped 不中断） |
+| 滚动窗口 | 可配置窗口长度/步长/最小样本量/检验方法子集（G5 前端透传）的时序滚动重算（退化窗口记 skipped 不中断） |
 | 滞后分析 | [-maxLag,+maxLag] 全整数滞后 Pearson 扫描（PRD 模块 H），最优 lag 自动标注；结果页曲线图 + 表格双视图 |
 | 数据真实性审计 | 缺失率 / 跳点 / 陈旧数据六类审计，pass/warn/fail 三级判定；双源一致性审计（同标的第二数据源：状态一致率 + 同质性卡方）；fail 序列强制注入 LLM 安全旗标（置信降级） |
 | LLM 解释 | qwen（DashScope）/ deepseek 可选；提示词模板版本化（`prompts/`），输出经 Zod Schema 严格校验；无密钥自动降级 skipped，不阻塞统计结果 |
@@ -44,7 +44,7 @@
 │   └── ui                      # 设计 Token 唯一来源（tokens.ts / tokens.css）
 ├── services/
 │   ├── analysis-engine         # 纯函数统计/审计引擎（无 IO、无框架依赖，141 测试）
-│   └── api                     # Express 5 网关：任务编排 / 数据适配 / LLM 推理（82 测试）
+│   └── api                     # Express 5 网关：任务编排 / 数据适配 / LLM 推理（83 测试）
 ├── prompts/                    # LLM 提示词模板 + output_schema.json（版本号入 trace）
 ├── infra/db                    # PostgreSQL 迁移 SQL + 本地免管理员启停脚本
 ├── tests/fixtures              # 黄金基准集 stat-reference.json（scipy/numpy 参考值）
@@ -114,14 +114,14 @@ pnpm --filter @platform/web dev
 ## ✅ 常用命令
 
 ```bash
-pnpm test                # 全仓测试（5 包共 248 例）
+pnpm test                # 全仓测试（5 包共 253 例）
 pnpm typecheck           # 全仓 TypeScript 严格检查
 pnpm lint                # ESLint
 pnpm build               # 全仓构建（web: vite / api: tsup）
 pnpm --filter @platform/api db:migrate   # 应用数据库迁移（幂等）
 ```
 
-测试矩阵：analysis-engine **141** · api **82**（含 PostgreSQL 集成测试与审计注入测试）· schemas **14** · ui **7** · shared **4**。
+测试矩阵：analysis-engine **141** · api **83**（含 PostgreSQL 集成测试与审计注入测试）· schemas **18** · ui **7** · shared **4**。
 
 ---
 
@@ -147,9 +147,9 @@ https://dashboard.render.com/blueprint/new?repo=https://github.com/raymodny-ai/F
 
 ## 🗺️ 路线图与已知缺口
 
-当前为 **P0 MVP**（T01~T20 已完成），PRD 缺口补全进行中：滞后分析（模块 H）、双源审计编排（模块 J）、01~15 编号导出已交付。在册缺口（详见 `.agent/CONTEXT.md`）：
+当前为 **P0 MVP**（T01~T20 已完成），PRD 缺口补全进行中：滞后分析（模块 H）、双源审计编排（模块 J）、01~15 编号导出、滚动窗口参数透传已交付。在册缺口（详见 `.agent/CONTEXT.md`）：
 
-- web 主 chunk 1.3MB（待代码分割）· 滚动窗口 minSamples/methods 前端透传
+- web 主 chunk 1.3MB（待代码分割）
 - 配置模板复用（保存模板/复制分析/重跑同配置）· CSV 上传源的第二文件双源审计 UI · 派生序列编辑 UI · 交易所节假日日历
 - Render free PostgreSQL 90 天试用期提醒
 

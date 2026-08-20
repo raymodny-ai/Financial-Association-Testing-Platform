@@ -20,7 +20,7 @@ import {
 import { PlusOutlined, UploadOutlined } from '@ant-design/icons';
 import type { UploadFile } from 'antd';
 import type { Dayjs } from 'dayjs';
-import { DEFAULTS, taskConfigSchema } from '@platform/schemas';
+import { DEFAULTS, taskConfigSchema, type RollingMethod } from '@platform/schemas';
 import { createTask, runTask, uploadCsv } from '../lib/api';
 
 /** G5：workspaceId 由服务端 Cookie 注入并覆盖，客户端 safeParse 仅占位校验 */
@@ -63,6 +63,14 @@ function newDraftSource(): DraftSource {
 
 const STEP_TITLES = ['数据源', '样本区间', '期间划分', '检验选项', '预览与运行'];
 
+/** 滚动窗口检验方法选项（与契约 rollingMethodSchema 同源，G5 前端透传） */
+const ROLLING_METHOD_OPTIONS: Array<{ value: RollingMethod; label: string }> = [
+  { value: 'chi_square_independence', label: '卡方独立性' },
+  { value: 'pearson', label: 'Pearson 相关' },
+  { value: 'spearman', label: 'Spearman 相关' },
+  { value: 'mutual_information', label: '互信息（置换）' },
+];
+
 export default function HomePage() {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
@@ -84,6 +92,10 @@ export default function HomePage() {
   const [rollingEnabled, setRollingEnabled] = useState(true);
   const [windowDays, setWindowDays] = useState<number>(DEFAULTS.rollingWindowDays);
   const [stepDays, setStepDays] = useState<number>(DEFAULTS.rollingStepDays);
+  /** 最小样本量；null = 缺省（引擎默认仅完整窗口） */
+  const [minSamples, setMinSamples] = useState<number | null>(null);
+  /** 滚动检验方法子集；默认全部四法 */
+  const [rollingMethods, setRollingMethods] = useState<RollingMethod[]>(ROLLING_METHOD_OPTIONS.map((o) => o.value));
   const [alpha, setAlpha] = useState<number>(DEFAULTS.alpha);
   const [correction, setCorrection] = useState<'none' | 'bonferroni' | 'bh' | 'by'>('bh');
   const [permutations, setPermutations] = useState<number>(1000);
@@ -183,7 +195,13 @@ export default function HomePage() {
       },
       binning: { method: binningMethod, bins },
       tests: { alpha, correction, permutations, permutationSeed: 20260819 },
-      rolling: { enabled: rollingEnabled, windowDays, stepDays },
+      rolling: {
+        enabled: rollingEnabled,
+        windowDays,
+        stepDays,
+        ...(minSamples !== null ? { minSamples } : {}),
+        methods: rollingMethods,
+      },
       maxLag,
       llmModel: 'qwen-plus',
       promptVersion: 'v1',
@@ -194,7 +212,7 @@ export default function HomePage() {
     // 预览步刷新时机：进入第 4 步或点击运行时重算即可，此处保持轻量依赖
     step, sources, projectName, startDate, endDate, frequency,
     referenceStart, referenceEnd, testStart, testEnd,
-    binningMethod, bins, rollingEnabled, windowDays, stepDays,
+    binningMethod, bins, rollingEnabled, windowDays, stepDays, minSamples, rollingMethods,
     alpha, correction, permutations, maxLag,
   ]);
 
@@ -506,6 +524,29 @@ export default function HomePage() {
                 <InputNumber value={stepDays} min={1} style={{ width: '100%' }} disabled={!rollingEnabled} onChange={(v) => setStepDays(v ?? DEFAULTS.rollingStepDays)} />
               </div>
               <div>
+                <span className="field-label">最小样本量（观测数）</span>
+                <InputNumber
+                  value={minSamples}
+                  min={2}
+                  max={windowDays}
+                  placeholder={`缺省=${windowDays}（仅完整窗口）`}
+                  style={{ width: '100%' }}
+                  disabled={!rollingEnabled}
+                  onChange={(v) => setMinSamples(v)}
+                />
+              </div>
+              <div>
+                <span className="field-label">滚动检验方法</span>
+                <Select<RollingMethod[]>
+                  mode="multiple"
+                  value={rollingMethods}
+                  style={{ width: '100%' }}
+                  disabled={!rollingEnabled}
+                  options={ROLLING_METHOD_OPTIONS}
+                  onChange={(v) => setRollingMethods(v)}
+                />
+              </div>
+              <div>
                 <span className="field-label">显著性水平 α</span>
                 <InputNumber value={alpha} min={0.001} max={0.999} step={0.01} style={{ width: '100%' }} onChange={(v) => setAlpha(v ?? DEFAULTS.alpha)} />
               </div>
@@ -563,7 +604,7 @@ export default function HomePage() {
                     { key: 'periods', label: '参考期 / 检验期', children: `${referenceStart?.format(DATE_FORMAT) ?? ''} ~ ${referenceEnd?.format(DATE_FORMAT) ?? ''} / ${testStart?.format(DATE_FORMAT) ?? ''} ~ ${testEnd?.format(DATE_FORMAT) ?? ''}` },
                     { key: 'binning', label: '分箱', children: `${binningMethod} × ${bins} 桶` },
                     { key: 'tests', label: '检验选项', children: `α=${alpha}，校正=${correction}，置换=${permutations}，最大滞后=${maxLag}` },
-                    { key: 'rolling', label: '滚动窗口', children: rollingEnabled ? `${windowDays} 日 / 步长 ${stepDays}` : '关闭' },
+                    { key: 'rolling', label: '滚动窗口', children: rollingEnabled ? `${windowDays} 日 / 步长 ${stepDays}${minSamples !== null ? ` / 最小样本 ${minSamples}` : ''} / ${rollingMethods.length} 法` : '关闭' },
                   ]}
                 />
                 <Button type="primary" size="large" disabled={!parsed.success} onClick={() => void handleSubmit()}>

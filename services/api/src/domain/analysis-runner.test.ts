@@ -223,6 +223,28 @@ describe('runAnalysis · 全链路（注入 fake 依赖）', () => {
     expect(interpretCalls[0]!.context.audit_key_findings).toContain('双源一致率');
   });
 
+  it('滚动窗口透传（G5）：methods 子集只产出所选方法，minSamples 允许末端部分窗口', async () => {
+    const { deps } = fakeDeps();
+    const baseline = await runAnalysis(baseConfig, deps);
+    const baseWindows = new Set(
+      baseline.results.filter((r) => r.window_end !== null).map((r) => r.window_end),
+    );
+
+    const config: TaskConfig = {
+      ...baseConfig,
+      rolling: { enabled: true, windowDays: 60, stepDays: 21, minSamples: 30, methods: ['pearson'] },
+    };
+    const outcome = await runAnalysis(config, deps);
+    const rolling = outcome.results.filter((r) => r.window_end !== null);
+    expect(rolling.length).toBeGreaterThan(0);
+    // methods 透传：滚动行一律所选方法
+    for (const row of rolling) expect(row.test_name).toBe('pearson');
+    // minSamples 透传：窗口集为完整窗口基线的超集（末端部分窗口被保留）
+    const windows = new Set(rolling.map((r) => r.window_end));
+    expect(windows.size).toBeGreaterThanOrEqual(baseWindows.size);
+    for (const w of baseWindows) expect(windows.has(w)).toBe(true);
+  });
+
   it('CSV 上传源：字段映射 date_col/close_col/adj_close_col 生效', async () => {
     const csv = [
       'date,close,adj_close',

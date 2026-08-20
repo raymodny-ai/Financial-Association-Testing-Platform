@@ -79,12 +79,30 @@ export const binningConfigSchema = z.object({
 });
 export type BinningConfig = z.infer<typeof binningConfigSchema>;
 
+/** 滚动窗口检验方法（与引擎 ROLLING_METHODS 同源） */
+export const rollingMethodSchema = z.enum([
+  'chi_square_independence',
+  'pearson',
+  'spearman',
+  'mutual_information',
+]);
+export type RollingMethod = z.infer<typeof rollingMethodSchema>;
+
 /** 滚动窗口配置 */
-export const rollingConfigSchema = z.object({
-  enabled: z.boolean().default(true),
-  windowDays: z.number().int().min(30).default(DEFAULTS.rollingWindowDays),
-  stepDays: z.number().int().min(1).default(DEFAULTS.rollingStepDays),
-});
+export const rollingConfigSchema = z
+  .object({
+    enabled: z.boolean().default(true),
+    windowDays: z.number().int().min(30).default(DEFAULTS.rollingWindowDays),
+    stepDays: z.number().int().min(1).default(DEFAULTS.rollingStepDays),
+    /** 最小样本量（≥2 且 ≤ windowDays）；缺省 = windowDays，即仅完整窗口（引擎默认） */
+    minSamples: z.number().int().min(2).optional(),
+    /** 参与滚动重算的方法子集；缺省 = 全部四法（引擎默认） */
+    methods: z.array(rollingMethodSchema).min(1).optional(),
+  })
+  .refine((c) => c.minSamples === undefined || c.minSamples <= c.windowDays, {
+    message: '最小样本量不得超过窗口长度（windowDays）',
+    path: ['minSamples'],
+  });
 export type RollingConfig = z.infer<typeof rollingConfigSchema>;
 
 /** 统计检验选项 */

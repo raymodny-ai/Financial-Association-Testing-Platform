@@ -148,6 +148,54 @@ describe('taskConfigSchema 业务规则', () => {
   });
 });
 
+describe('rollingConfigSchema 滚动窗口透传（G5）', () => {
+  const base = {
+    projectName: '滚动透传',
+    workspaceId: '11111111-1111-4111-8111-111111111111',
+    dataSources: [
+      { kind: 'ticker', alias: 'spy', ticker: 'SPY.US', provider: 'stooq' },
+      { kind: 'ticker', alias: 'gold', ticker: 'XAUUSD', provider: 'stooq' },
+    ],
+    startDate: '2018-01-01',
+    endDate: '2024-12-31',
+    periods: {
+      referenceStart: '2018-01-01',
+      referenceEnd: '2020-12-31',
+      testStart: '2021-01-01',
+      testEnd: '2024-12-31',
+    },
+  };
+
+  it('接受 minSamples 与 methods 子集配置', () => {
+    const parsed = taskConfigSchema.parse({
+      ...base,
+      rolling: { enabled: true, windowDays: 60, stepDays: 5, minSamples: 30, methods: ['pearson', 'spearman'] },
+    });
+    expect(parsed.rolling.minSamples).toBe(30);
+    expect(parsed.rolling.methods).toEqual(['pearson', 'spearman']);
+  });
+
+  it('缺省时不填充（引擎默认：仅完整窗口 / 全部四法）', () => {
+    const parsed = taskConfigSchema.parse(base);
+    expect(parsed.rolling.minSamples).toBeUndefined();
+    expect(parsed.rolling.methods).toBeUndefined();
+  });
+
+  it('拒绝 minSamples 大于 windowDays 或小于 2', () => {
+    expect(
+      taskConfigSchema.safeParse({ ...base, rolling: { windowDays: 60, stepDays: 5, minSamples: 61 } }).success,
+    ).toBe(false);
+    expect(
+      taskConfigSchema.safeParse({ ...base, rolling: { windowDays: 60, stepDays: 5, minSamples: 1 } }).success,
+    ).toBe(false);
+  });
+
+  it('拒绝空 methods 与未知方法名', () => {
+    expect(taskConfigSchema.safeParse({ ...base, rolling: { methods: [] } }).success).toBe(false);
+    expect(taskConfigSchema.safeParse({ ...base, rolling: { methods: ['kendall'] } }).success).toBe(false);
+  });
+});
+
 describe('上传文件契约', () => {
   it('uploadedFileSchema 含元数据字段且拒绝空列', () => {
     expect(Object.keys(uploadedFileSchema.shape)).toEqual([

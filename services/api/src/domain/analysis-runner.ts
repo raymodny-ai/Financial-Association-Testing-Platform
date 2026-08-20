@@ -282,6 +282,9 @@ export async function runAnalysis(config: TaskConfig, deps: RunnerDeps): Promise
     const report = rollingWindowTests(dataset, {
       windowSize: config.rolling.windowDays,
       stepSize: config.rolling.stepDays,
+      // G5：前端可配置项透传（缺省交给引擎默认：仅完整窗口 / 全部四法）
+      ...(config.rolling.minSamples !== undefined ? { minSamples: config.rolling.minSamples } : {}),
+      ...(config.rolling.methods !== undefined ? { methods: config.rolling.methods } : {}),
     });
     rollingSkippedCount = report.skipped.length;
     rollingDrafts = report.rows.map((r) => ({
