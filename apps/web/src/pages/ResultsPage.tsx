@@ -357,7 +357,7 @@ export default function ResultsPage() {
               <div>
                 <div className="config-summary-label">数据源</div>
                 <div className="config-summary-value">
-                  {config.dataSources.map((s) => (s.kind === 'ticker' ? `${s.alias}（${s.ticker}@${s.provider}）` : `${s.alias}（上传文件）`)).join('、')}
+                  {config.dataSources.map((s) => (s.kind === 'ticker' ? `${s.alias}（${s.ticker}@${s.provider}${s.dualSource !== undefined ? `，双源@${s.dualSource.provider}` : ''}）` : `${s.alias}（上传文件${s.dualSource !== undefined ? '，双源对账' : ''}）`)).join('、')}
                 </div>
               </div>
               {/* G11：派生序列非空时在配置摘要展示（与向导预览同源字段） */}

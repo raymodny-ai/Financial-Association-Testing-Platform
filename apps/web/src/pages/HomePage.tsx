@@ -63,7 +63,16 @@ interface DraftSource {
   dateCol?: string;
   closeCol?: string;
   adjCloseCol?: string;
+  /** 双源审计第二上传文件（PRD 模块 J，G12）；仅对 upload 源有效 */
+  dualFileId?: string;
+  dualFilename?: string;
+  dualColumns: string[];
+  dualDateCol?: string;
+  dualCloseCol?: string;
+  dualAdjCloseCol?: string;
   uploading: boolean;
+  /** 第二文件上传中 */
+  dualUploading: boolean;
 }
 
 let sourceSeq = 0;
@@ -77,7 +86,9 @@ function newDraftSource(): DraftSource {
     provider: 'yahoo',
     dualProvider: '',
     columns: [],
+    dualColumns: [],
     uploading: false,
+    dualUploading: false,
   };
 }
 
@@ -171,6 +182,28 @@ export default function HomePage() {
     }
   }
 
+  /** G12：双源审计第二文件上传（仅供对账，不进入分析面板） */
+  async function handleDualUpload(key: string, file: UploadFile): Promise<void> {
+    const raw = file as unknown as File;
+    patchSource(key, { dualUploading: true });
+    try {
+      const uploaded = await uploadCsv(raw);
+      patchSource(key, {
+        dualUploading: false,
+        dualFileId: uploaded.id,
+        dualFilename: uploaded.filename,
+        dualColumns: uploaded.columns,
+        dualDateCol: undefined,
+        dualCloseCol: undefined,
+        dualAdjCloseCol: undefined,
+      });
+      message.success(`已上传第二源 ${uploaded.filename}（${uploaded.rowCount} 行）`);
+    } catch (error) {
+      patchSource(key, { dualUploading: false });
+      message.error(error instanceof Error ? error.message : '上传失败');
+    }
+  }
+
   /* ---------------- 分步校验 ---------------- */
 
   const step0Valid =
@@ -180,6 +213,8 @@ export default function HomePage() {
     sources.every((s) => {
       if (s.alias.trim() === '') return false;
       if (s.kind === 'ticker') return s.ticker.trim() !== '';
+      // G12：第二源一旦选定文件即要求完成字段映射（与主文件同口径）
+      if (s.dualFileId !== undefined && (s.dualDateCol === undefined || s.dualCloseCol === undefined)) return false;
       return s.fileId !== undefined && s.dateCol !== undefined && s.closeCol !== undefined;
     }) &&
     // 派生序列：别名非空且与原始/其他派生不冲突，基础序列必须存在（引擎同名报错前置拦截）
@@ -232,6 +267,19 @@ export default function HomePage() {
                 close_col: s.closeCol ?? '',
                 ...(s.adjCloseCol ? { adj_close_col: s.adjCloseCol } : {}),
               },
+              // G12：双源一致性审计第二上传文件（契约 dualSource.fileId，关 N18）
+              ...(s.dualFileId !== undefined
+                ? {
+                    dualSource: {
+                      fileId: s.dualFileId,
+                      columnMapping: {
+                        date_col: s.dualDateCol ?? '',
+                        close_col: s.dualCloseCol ?? '',
+                        ...(s.dualAdjCloseCol ? { adj_close_col: s.dualAdjCloseCol } : {}),
+                      },
+                    },
+                  }
+                : {}),
             },
       ),
       startDate: fmt(startDate),
@@ -329,6 +377,7 @@ export default function HomePage() {
           };
         }
         const file = filesById.get(ds.fileId);
+        const dualFile = ds.dualSource !== undefined ? filesById.get(ds.dualSource.fileId) : undefined;
         return {
           ...newDraftSource(),
           kind: 'upload',
@@ -339,6 +388,17 @@ export default function HomePage() {
           dateCol: ds.columnMapping.date_col,
           closeCol: ds.columnMapping.close_col,
           adjCloseCol: ds.columnMapping.adj_close_col,
+          // G12：第二源回显（文件已删除时降级标注，映射仍保留供核对）
+          ...(ds.dualSource !== undefined
+            ? {
+                dualFileId: ds.dualSource.fileId,
+                dualFilename: dualFile?.filename ?? '（文件已删除）',
+                dualColumns: dualFile?.columns ?? [],
+                dualDateCol: ds.dualSource.columnMapping.date_col,
+                dualCloseCol: ds.dualSource.columnMapping.close_col,
+                dualAdjCloseCol: ds.dualSource.columnMapping.adj_close_col,
+              }
+            : {}),
         };
       }),
     );
@@ -564,6 +624,79 @@ export default function HomePage() {
                                 options={s.columns.map((c) => ({ label: c, value: c }))}
                               />
                             </div>
+                            {/* G12：双源一致性审计第二文件（PRD 模块 J，仅供对账，关 N18） */}
+                            <div>
+                              <span className="field-label">双源审计·第二文件（可选，同口径另一数据源）</span>
+                              <Space>
+                                <Upload
+                                  accept=".csv,text/csv"
+                                  showUploadList={false}
+                                  beforeUpload={(file) => {
+                                    void handleDualUpload(s.key, file as unknown as UploadFile);
+                                    return false;
+                                  }}
+                                >
+                                  <Button icon={<UploadOutlined />} loading={s.dualUploading}>
+                                    {s.dualFilename ?? '选择第二文件'}
+                                  </Button>
+                                </Upload>
+                                {s.dualFileId !== undefined && (
+                                  <Button
+                                    size="small"
+                                    onClick={() =>
+                                      patchSource(s.key, {
+                                        dualFileId: undefined,
+                                        dualFilename: undefined,
+                                        dualColumns: [],
+                                        dualDateCol: undefined,
+                                        dualCloseCol: undefined,
+                                        dualAdjCloseCol: undefined,
+                                      })
+                                    }
+                                  >
+                                    清除
+                                  </Button>
+                                )}
+                              </Space>
+                            </div>
+                            {s.dualFileId !== undefined && (
+                              <>
+                                <div>
+                                  <span className="field-label">第二源日期列（date_col）</span>
+                                  <Select
+                                    value={s.dualDateCol}
+                                    placeholder="选择列"
+                                    style={{ width: '100%' }}
+                                    disabled={s.dualColumns.length === 0}
+                                    onChange={(value) => patchSource(s.key, { dualDateCol: value })}
+                                    options={s.dualColumns.map((c) => ({ label: c, value: c }))}
+                                  />
+                                </div>
+                                <div>
+                                  <span className="field-label">第二源收盘价列（close_col）</span>
+                                  <Select
+                                    value={s.dualCloseCol}
+                                    placeholder="选择列"
+                                    style={{ width: '100%' }}
+                                    disabled={s.dualColumns.length === 0}
+                                    onChange={(value) => patchSource(s.key, { dualCloseCol: value })}
+                                    options={s.dualColumns.map((c) => ({ label: c, value: c }))}
+                                  />
+                                </div>
+                                <div>
+                                  <span className="field-label">第二源复权价列（adj_close_col，可选）</span>
+                                  <Select
+                                    value={s.dualAdjCloseCol}
+                                    placeholder="可不选"
+                                    allowClear
+                                    style={{ width: '100%' }}
+                                    disabled={s.dualColumns.length === 0}
+                                    onChange={(value) => patchSource(s.key, { dualAdjCloseCol: value })}
+                                    options={s.dualColumns.map((c) => ({ label: c, value: c }))}
+                                  />
+                                </div>
+                              </>
+                            )}
                           </>
                         )}
                       </div>
@@ -848,7 +981,7 @@ export default function HomePage() {
                   column={2}
                   items={[
                     { key: 'project', label: '项目名称', children: projectName },
-                    { key: 'sources', label: '数据源', children: sources.map((s) => `${s.alias}（${s.kind === 'ticker' ? s.ticker : s.filename ?? 'CSV'}${s.kind === 'ticker' && s.dualProvider !== '' ? `，双源审计:${s.dualProvider}` : ''}）`).join('、') },
+                    { key: 'sources', label: '数据源', children: sources.map((s) => `${s.alias}（${s.kind === 'ticker' ? s.ticker : s.filename ?? 'CSV'}${s.kind === 'ticker' && s.dualProvider !== '' ? `，双源审计:${s.dualProvider}` : ''}${s.kind === 'upload' && s.dualFileId !== undefined ? `，双源审计:${s.dualFilename ?? 'CSV'}` : ''}）`).join('、') },
                     { key: 'derived', label: '派生序列', children: derived.length === 0 ? '无' : derived.map((d) => `${d.alias} ← ${d.sourceAlias}（${TRANSFORM_OPTIONS.find((t) => t.value === d.transform)?.label ?? d.transform}）`).join('、') },
                     { key: 'range', label: '样本区间', children: `${startDate?.format(DATE_FORMAT) ?? ''} ~ ${endDate?.format(DATE_FORMAT) ?? ''}` },
                     { key: 'periods', label: '参考期 / 检验期', children: `${referenceStart?.format(DATE_FORMAT) ?? ''} ~ ${referenceEnd?.format(DATE_FORMAT) ?? ''} / ${testStart?.format(DATE_FORMAT) ?? ''} ~ ${testEnd?.format(DATE_FORMAT) ?? ''}` },

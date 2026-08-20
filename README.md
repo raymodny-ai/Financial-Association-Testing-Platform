@@ -150,7 +150,7 @@ https://dashboard.render.com/blueprint/new?repo=https://github.com/raymodny-ai/F
 当前为 **P0 MVP**（T01~T20 已完成），PRD 缺口补全进行中：滞后分析（模块 H）、双源审计编排（模块 J）、01~15 编号导出、滚动窗口参数透传、配置模板复用已交付。在册缺口（详见 `.agent/CONTEXT.md`）：
 
 - ~~web 主 chunk 1.3MB（待代码分割）~~（已闭：vendor 分割 + 路由懒加载，入口壳 4.5kB）
-- CSV 上传源的第二文件双源审计 UI · 交易所节假日日历
+- 交易所节假日日历
 - ~~Render free PostgreSQL 90 天试用期提醒~~（已闭：docs/DEPLOY.md 已给出备份 + 付费层升级 + Supabase 迁移双路径）
 
 ---
