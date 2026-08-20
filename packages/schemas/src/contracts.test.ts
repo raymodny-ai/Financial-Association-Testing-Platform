@@ -148,6 +148,37 @@ describe('taskConfigSchema 业务规则', () => {
     };
     expect(() => taskConfigSchema.parse(bad)).toThrow();
   });
+
+  it('upload 源空字段映射拒绝（Zod 3 record 无 min，refine 守卫，G15 关 N3）', () => {
+    const bad = {
+      ...base,
+      dataSources: [
+        { kind: 'upload', alias: 'spy', fileId: '22222222-2222-4222-8222-222222222222', columnMapping: {} },
+        base.dataSources[1],
+      ],
+    };
+    expect(() => taskConfigSchema.parse(bad)).toThrow(/字段映射不得为空/);
+  });
+
+  it('dualSource 第二文件空字段映射同样拒绝（G15 关 N3）', () => {
+    const bad = {
+      ...base,
+      dataSources: [
+        {
+          kind: 'upload',
+          alias: 'spy',
+          fileId: '22222222-2222-4222-8222-222222222222',
+          columnMapping: { date_col: 'date', close_col: 'close' },
+          dualSource: {
+            fileId: '33333333-3333-4333-8333-333333333333',
+            columnMapping: {},
+          },
+        },
+        base.dataSources[1],
+      ],
+    };
+    expect(() => taskConfigSchema.parse(bad)).toThrow(/字段映射不得为空/);
+  });
 });
 
 describe('rollingConfigSchema 滚动窗口透传（G5）', () => {
