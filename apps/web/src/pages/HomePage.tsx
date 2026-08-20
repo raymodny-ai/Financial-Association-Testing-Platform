@@ -27,6 +27,7 @@ import {
   DEFAULTS,
   taskConfigSchema,
   type AnalysisTemplate,
+  type DerivedSeries,
   type RollingMethod,
   type TaskConfig,
   type UploadedFile,
@@ -90,6 +91,13 @@ const ROLLING_METHOD_OPTIONS: Array<{ value: RollingMethod; label: string }> = [
   { value: 'mutual_information', label: '互信息（置换）' },
 ];
 
+/** 派生序列变换选项（与契约 derivedSeriesSchema.transform 同源，G11） */
+const TRANSFORM_OPTIONS: Array<{ value: DerivedSeries['transform']; label: string }> = [
+  { value: 'pct_return', label: '百分比收益率（pct_return）' },
+  { value: 'log_return', label: '对数收益率（log_return）' },
+  { value: 'diff', label: '一阶差分（diff）' },
+];
+
 export default function HomePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -98,6 +106,8 @@ export default function HomePage() {
 
   const [projectName, setProjectName] = useState('');
   const [sources, setSources] = useState<DraftSource[]>([newDraftSource(), newDraftSource()]);
+  /** 派生序列（G11：由基础序列经收益率/差分派生，参与后续全部检验） */
+  const [derived, setDerived] = useState<DerivedSeries[]>([]);
 
   const [startDate, setStartDate] = useState<Dayjs | null>(null);
   const [endDate, setEndDate] = useState<Dayjs | null>(null);
@@ -171,6 +181,14 @@ export default function HomePage() {
       if (s.alias.trim() === '') return false;
       if (s.kind === 'ticker') return s.ticker.trim() !== '';
       return s.fileId !== undefined && s.dateCol !== undefined && s.closeCol !== undefined;
+    }) &&
+    // 派生序列：别名非空且与原始/其他派生不冲突，基础序列必须存在（引擎同名报错前置拦截）
+    new Set(derived.map((d) => d.alias.trim())).size === derived.length &&
+    derived.every((d) => {
+      const alias = d.alias.trim();
+      if (alias === '') return false;
+      if (sources.some((s) => s.alias.trim() === alias)) return false;
+      return sources.some((s) => s.alias.trim() === d.sourceAlias);
     });
 
   const step1Valid =
@@ -219,6 +237,8 @@ export default function HomePage() {
       startDate: fmt(startDate),
       endDate: fmt(endDate),
       frequency,
+      // G11：派生序列定义（契约 default []，显式透传以支持模板/复制分析回显）
+      derivedSeries: derived.map((d) => ({ ...d, alias: d.alias.trim() })),
       periods: {
         referenceStart: fmt(referenceStart),
         referenceEnd: fmt(referenceEnd),
@@ -242,7 +262,7 @@ export default function HomePage() {
 
   const parsed = useMemo(() => taskConfigSchema.safeParse(buildConfig()), [
     // 预览步刷新时机：进入第 4 步或点击运行时重算即可，此处保持轻量依赖
-    step, sources, projectName, startDate, endDate, frequency,
+    step, sources, derived, projectName, startDate, endDate, frequency,
     referenceStart, referenceEnd, testStart, testEnd,
     binningMethod, bins, rollingEnabled, windowDays, stepDays, minSamples, rollingMethods,
     alpha, correction, permutations, maxLag,
@@ -322,6 +342,7 @@ export default function HomePage() {
         };
       }),
     );
+    setDerived(config.derivedSeries);
   }
 
   async function loadTemplate(template: AnalysisTemplate): Promise<void> {
@@ -556,6 +577,73 @@ export default function HomePage() {
                     添加数据源
                   </Button>
                 </div>
+                <div>
+                  {/* G11：派生序列编辑（PRD 配置设计「派生序列定义」，关 N15） */}
+                  <span className="field-label">派生序列（可选：由基础序列经变换生成，与原始序列同等参与检验）</span>
+                  {derived.map((d, index) => (
+                    <div key={`derived-${index}`} className="source-card">
+                      <div className="source-card-header">
+                        <span className="font-data">D{index + 1}</span>
+                        <Button
+                          danger
+                          size="small"
+                          onClick={() => setDerived((prev) => prev.filter((_, i) => i !== index))}
+                        >
+                          移除
+                        </Button>
+                      </div>
+                      <div className="source-fields">
+                        <div>
+                          <span className="field-label">派生别名</span>
+                          <Input
+                            value={d.alias}
+                            maxLength={64}
+                            placeholder="如 rA"
+                            onChange={(e) =>
+                              setDerived((prev) => prev.map((x, i) => (i === index ? { ...x, alias: e.target.value } : x)))
+                            }
+                          />
+                        </div>
+                        <div>
+                          <span className="field-label">基础序列</span>
+                          <Select
+                            value={d.sourceAlias}
+                            placeholder="选择序列"
+                            style={{ width: '100%' }}
+                            onChange={(value) =>
+                              setDerived((prev) => prev.map((x, i) => (i === index ? { ...x, sourceAlias: value } : x)))
+                            }
+                            options={sources
+                              .map((s) => s.alias.trim())
+                              .filter((alias) => alias !== '')
+                              .map((alias) => ({ label: alias, value: alias }))}
+                          />
+                        </div>
+                        <div>
+                          <span className="field-label">变换方式</span>
+                          <Select<DerivedSeries['transform']>
+                            value={d.transform}
+                            style={{ width: '100%' }}
+                            options={TRANSFORM_OPTIONS}
+                            onChange={(value) =>
+                              setDerived((prev) => prev.map((x, i) => (i === index ? { ...x, transform: value } : x)))
+                            }
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <Button
+                    type="dashed"
+                    icon={<PlusOutlined />}
+                    onClick={() => {
+                      const firstAlias = sources.map((s) => s.alias.trim()).find((alias) => alias !== '') ?? '';
+                      setDerived((prev) => [...prev, { alias: '', sourceAlias: firstAlias, transform: 'pct_return' }]);
+                    }}
+                  >
+                    添加派生序列
+                  </Button>
+                </div>
               </Space>
             </div>
           )}
@@ -761,6 +849,7 @@ export default function HomePage() {
                   items={[
                     { key: 'project', label: '项目名称', children: projectName },
                     { key: 'sources', label: '数据源', children: sources.map((s) => `${s.alias}（${s.kind === 'ticker' ? s.ticker : s.filename ?? 'CSV'}${s.kind === 'ticker' && s.dualProvider !== '' ? `，双源审计:${s.dualProvider}` : ''}）`).join('、') },
+                    { key: 'derived', label: '派生序列', children: derived.length === 0 ? '无' : derived.map((d) => `${d.alias} ← ${d.sourceAlias}（${TRANSFORM_OPTIONS.find((t) => t.value === d.transform)?.label ?? d.transform}）`).join('、') },
                     { key: 'range', label: '样本区间', children: `${startDate?.format(DATE_FORMAT) ?? ''} ~ ${endDate?.format(DATE_FORMAT) ?? ''}` },
                     { key: 'periods', label: '参考期 / 检验期', children: `${referenceStart?.format(DATE_FORMAT) ?? ''} ~ ${referenceEnd?.format(DATE_FORMAT) ?? ''} / ${testStart?.format(DATE_FORMAT) ?? ''} ~ ${testEnd?.format(DATE_FORMAT) ?? ''}` },
                     { key: 'binning', label: '分箱', children: `${binningMethod} × ${bins} 桶` },

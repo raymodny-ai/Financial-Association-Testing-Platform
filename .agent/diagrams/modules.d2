@@ -34,8 +34,8 @@ services: {
 
 apps: {
   web: "apps/web\nReact + Vite + AntD\nG7 路由懒加载 + vendor 分割" {
-    home: "HomePage 新建分析向导（五步 Steps，safeParse 校验；G6 模板条载入/删除 + 保存为模板 + /?clone 预填）"
-    results: "ResultsPage 三栏结果页（.layout-results + 风险固定条 + Tab 区 + 导出）"
+    home: "HomePage 新建分析向导（五步 Steps，safeParse 校验；G6 模板条载入/删除 + 保存为模板 + /?clone 预填；G11 派生序列编辑器）"
+    results: "ResultsPage 三栏结果页（.layout-results + 风险固定条 + 七 Tab：分类/连续/滚动/滞后/审计/LLM/原始导出 + 导出）"
     lag-chart: "LagCurveChart 零依赖 SVG 滞后曲线图（与表格双视图，PRD 模块 H）"
     history: "HistoryPage 任务列表（状态标签 + 重跑 + 复制分析）"
     lib: "lib/api.ts fetch 封装（credentials:'include' + Zod 出参校验，含 panel 快照） + lib/export.ts 下载原语 + lib/export-report.ts 01~15 编号导出生成器"
