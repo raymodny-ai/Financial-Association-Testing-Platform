@@ -3,7 +3,7 @@
  *
  * 定案（ADR 001）：jstat 仅承担分布函数，统计量一律 TS 自实现。
  * sf(x, df) = P(χ² > x)，即检验 p 值的计算通道；
- * 正确性由 chi2.test.ts 对偶数自由度闭式解对拍（容差 1e-9）。
+ * 正确性由 chi2.test.ts 对偶数自由度闭式解 + 奇数自由度不完全伽马真值对拍（容差 1e-9）。
  */
 // ambient 声明无法经 import 传播；三斜线引用让 jstat.d.ts 随源文件进入消费方工程
 // eslint-disable-next-line @typescript-eslint/triple-slash-reference
