@@ -16,5 +16,26 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
+    rollupOptions: {
+      output: {
+        // G7：vendor 分割——AntD 系（含图标/字体库）与 React 系各自独立缓存，
+        // 业务代码变更不再使巨型依赖 chunk 缓存失效（关闭 N1）
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined;
+          if (
+            id.includes('antd') ||
+            id.includes('@ant-design') ||
+            id.includes('dayjs') ||
+            /[/\\](rc-|@rc-component[/\\])/.test(id)
+          ) {
+            return 'vendor-antd';
+          }
+          if (id.includes('react') || id.includes('scheduler')) {
+            return 'vendor-react';
+          }
+          return undefined;
+        },
+      },
+    },
   },
 });

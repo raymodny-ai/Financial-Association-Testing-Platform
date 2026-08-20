@@ -1,12 +1,15 @@
-import { Layout, Menu } from 'antd';
+import { lazy, Suspense } from 'react';
+import { Layout, Menu, Spin } from 'antd';
 import { Link, Route, Routes, useLocation } from 'react-router-dom';
 import { appTheme } from './theme';
 import { ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
-import HistoryPage from './pages/HistoryPage';
-import HomePage from './pages/HomePage';
-import ResultsPage from './pages/ResultsPage';
-import SettingsPage from './pages/SettingsPage';
+
+// G7：路由级懒加载——页面代码按需拉取，首屏只下载框架壳 + vendor（关闭 N1）
+const HistoryPage = lazy(() => import('./pages/HistoryPage'));
+const HomePage = lazy(() => import('./pages/HomePage'));
+const ResultsPage = lazy(() => import('./pages/ResultsPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 
 const { Header, Content } = Layout;
 
@@ -37,13 +40,15 @@ export default function App() {
           />
         </Header>
         <Content style={{ padding: 'var(--space-6)' }}>
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/results" element={<ResultsPage />} />
-            <Route path="/results/:taskId" element={<ResultsPage />} />
-            <Route path="/history" element={<HistoryPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-          </Routes>
+          <Suspense fallback={<Spin style={{ display: 'block', margin: 'var(--space-8) auto' }} />}>
+            <Routes>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/results" element={<ResultsPage />} />
+              <Route path="/results/:taskId" element={<ResultsPage />} />
+              <Route path="/history" element={<HistoryPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+            </Routes>
+          </Suspense>
         </Content>
       </Layout>
     </ConfigProvider>
