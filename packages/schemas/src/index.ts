@@ -8,6 +8,7 @@ export * from './common';
 export * from './task';
 export * from './config-diff';
 export * from './template';
+export * from './annotation';
 export * from './result';
 export * from './audit';
 export * from './panel';

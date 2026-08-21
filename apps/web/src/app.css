@@ -80,6 +80,19 @@
   gap: var(--space-2);
 }
 
+/* 研究批注条目（X4：结果页右栏研究注释卡） */
+.annotation-item {
+  padding: var(--space-2) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.annotation-item:last-of-type {
+  border-bottom: none;
+}
+
 /* 检验选项步方法说明（X3）：跨满表单网格，双列紧凑列表 */
 .method-guide {
   grid-column: 1 / -1;

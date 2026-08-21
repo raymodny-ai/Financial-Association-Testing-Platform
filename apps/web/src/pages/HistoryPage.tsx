@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Button, Card, Space, Table, Tag, Typography, message } from 'antd';
+import { StarFilled } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
 import type { TaskRecord, TaskStatus } from '@platform/schemas';
@@ -37,7 +38,13 @@ export default function HistoryPage() {
   const columns: ColumnsType<TaskRecord> = [
     {
       title: '项目名称',
-      render: (_: unknown, record: TaskRecord) => record.config.projectName,
+      render: (_: unknown, record: TaskRecord) => (
+        <Space size="small">
+          {/* X4 收藏旗标：结果页切换，历史页展示 */}
+          {record.favorited && <StarFilled style={{ color: 'var(--color-watch)' }} />}
+          <span>{record.config.projectName}</span>
+        </Space>
+      ),
     },
     {
       title: '状态',

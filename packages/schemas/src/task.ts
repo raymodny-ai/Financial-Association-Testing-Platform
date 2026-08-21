@@ -249,5 +249,7 @@ export const taskRecordSchema = z.object({
   updatedAt: z.string().datetime({ offset: true }),
   /** 失败原因（status=failed 时） */
   errorMessage: z.string().nullable().default(null),
+  /** 收藏旗标（X4，PRD L356）；历史行缺省 false */
+  favorited: z.boolean().default(false),
 });
 export type TaskRecord = z.infer<typeof taskRecordSchema>;

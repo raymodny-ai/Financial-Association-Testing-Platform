@@ -5,6 +5,7 @@ import { AppError } from '@platform/shared';
 import type { Logger } from './infrastructure/logger.js';
 import { healthRouter } from './presentation/routes/health.js';
 import { tasksRouter } from './presentation/routes/tasks.js';
+import { annotationsRouter } from './presentation/routes/annotations.js';
 import { filesRouter } from './presentation/routes/files.js';
 import { templatesRouter } from './presentation/routes/templates.js';
 import { workspaceMiddleware } from './presentation/middleware/workspace.js';
@@ -61,6 +62,8 @@ export function createApp(options: AppOptions = {}): Express {
 
   app.use('/api/health', healthRouter);
   app.use('/api/tasks', tasksRouter);
+  // X4：批注与收藏（与 tasks 同前缀，子路径不重叠；归属校验同口径）
+  app.use('/api/tasks', annotationsRouter);
   app.use('/api/files', filesRouter);
   app.use('/api/templates', templatesRouter);
 

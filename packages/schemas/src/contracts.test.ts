@@ -3,13 +3,16 @@ import {
   analysisTemplateSchema,
   auditRowSchema,
   binningConfigSchema,
+  createAnnotationRequestSchema,
   createTemplateRequestSchema,
   derivedSeriesSchema,
   eventLabelSchema,
   llmContextSchema,
   llmOutputSchema,
   resultRowSchema,
+  taskAnnotationSchema,
   taskConfigSchema,
+  taskRecordSchema,
   uploadedFileSchema,
 } from './index';
 
@@ -365,6 +368,23 @@ describe('taskConfigSchema researchQuestion（G13，PRD 模块 K 输入要求，
   it('拒绝空白与超过 512 字符的研究问题', () => {
     expect(taskConfigSchema.safeParse({ ...base, researchQuestion: '  ' }).success).toBe(false);
     expect(taskConfigSchema.safeParse({ ...base, researchQuestion: '问'.repeat(513) }).success).toBe(false);
+  });
+});
+
+describe('批注与收藏契约（X4，PRD L140/L356）', () => {
+  it('taskAnnotationSchema 含 id/taskId/content/createdAt 四字段', () => {
+    expect(Object.keys(taskAnnotationSchema.shape)).toEqual(['id', 'taskId', 'content', 'createdAt']);
+  });
+
+  it('createAnnotationRequestSchema 仅含 content：trim 后非空且不超过 2000 字', () => {
+    expect(Object.keys(createAnnotationRequestSchema.shape)).toEqual(['content']);
+    expect(createAnnotationRequestSchema.safeParse({ content: '   ' }).success).toBe(false);
+    expect(createAnnotationRequestSchema.safeParse({ content: 'x'.repeat(2001) }).success).toBe(false);
+    expect(createAnnotationRequestSchema.parse({ content: ' 备注 ' }).content).toBe('备注');
+  });
+
+  it('taskRecordSchema 含 favorited 收藏旗标（缺省 false）', () => {
+    expect(Object.keys(taskRecordSchema.shape)).toContain('favorited');
   });
 });
 

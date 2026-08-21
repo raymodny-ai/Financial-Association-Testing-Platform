@@ -54,6 +54,7 @@ function toRecord(row: TaskRow): TaskRecord {
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
     errorMessage: row.error_message,
+    favorited: row.favorited,
   });
 }
 

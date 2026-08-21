@@ -11,6 +11,8 @@ export interface TaskRow {
   status: TaskStatus;
   config: TaskConfig;
   error_message: string | null;
+  /** 收藏旗标（X4）；迁移 007 引入，历史行缺省 false */
+  favorited: boolean;
   created_at: Date;
   updated_at: Date;
 }
@@ -73,5 +75,16 @@ export const taskRepository = {
        WHERE status = 'running'`,
     );
     return result.rowCount ?? 0;
+  },
+
+  /** X4 收藏切换（作用域内）；跨工作区或不存在返回 null */
+  async setFavorite(id: string, workspaceId: string, favorited: boolean): Promise<boolean | null> {
+    const { rows } = await pool.query<Pick<TaskRow, 'favorited'>>(
+      `UPDATE tasks SET favorited = $3, updated_at = now()
+       WHERE id = $1 AND workspace_id = $2
+       RETURNING favorited`,
+      [id, workspaceId, favorited],
+    );
+    return rows[0]?.favorited ?? null;
   },
 };

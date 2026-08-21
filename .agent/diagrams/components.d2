@@ -51,7 +51,7 @@ analysis-engine: "services/analysis-engine/src" {
 }
 
 analysis-engine.llm-context -> packages.schemas: "消费 TaskConfig/ResultTable/AuditTable，输出经 llmContextSchema 校验"
-packages.schemas: "packages/schemas\nZod 契约唯一来源 + 配置差异失效域分类（X2）"
+packages.schemas: "packages/schemas\nZod 契约唯一来源 + 配置差异失效域分类（X2）+ 批注/收藏契约（X4）"
 
 api-data-flow: "services/api 数据链路" {
   provider: "DataProvider.fetchHistory(ticker, {start,end,frequency})\n→ HistoryPanel{points, source, source_version, fetched_at}"
@@ -59,7 +59,7 @@ api-data-flow: "services/api 数据链路" {
   yahoo: "yahoo-adapter（主力，限速≥1s + 24h 缓存）"
   stooq: "stooq-adapter（休眠保留）"
   files: "files 路由：CSV 文本上传 → uploaded_files"
-  tasks: "tasks 路由：任务 CRUD + workspace 注入"
+  tasks: "tasks 路由：任务 CRUD + workspace 注入；X4 子路由 annotations 批注增删查 + PUT :id/favorite 收藏切换"
   prompt-renderer: "renderPrompt(template, context)\n{{placeholder}} ← LlmContext 12 字段；未知占位符抛错"
   llm-service: "runLlmInterpretation(options) → {output|null, trace}\n90s 超时/重试一次/剔围栏/schema 校验；skipped 降级永不抛错"
   llm-http: "openAiCompatibleClient.complete(request)\nchat/completions + response_format=json_object；AbortError→LlmTimeoutError"
@@ -79,7 +79,7 @@ api-analysis-flow: "services/api 任务运行编排（T17-A）" {
   run-progress: "RUN_STEPS 11 步标签 + reportProgress / getRunProgress / clearRunProgress（P2 单实例内存注册表，终态清空）"
   deps: "RunnerDeps DI：fetchHistory / readFileContent（工作区作用域）/ interpret / rollingExecutor?（P1 并行执行器，缺省串行）"
   rolling-pool: "runJobsParallel(workerPath, jobs, concurrency)（P1，node:worker_threads 固定池）\ndefaultRollingConcurrency = min(availableParallelism,4,任务数)\ncreateParallelRollingExecutor → plan→并行 executeRollingJob→reassemble\nrolling-worker.ts 独立入口（tsup 第三入口）"
-  repos: "resultRepository/auditRepository.replaceForTask（同事务 DELETE+INSERT）\nllmArtifactRepository.save（ON CONFLICT(task_id)）\ntaskRepository.recoverInterrupted（P2 启动清扫：重启中断的 running 置 failed）"
+  repos: "resultRepository/auditRepository.replaceForTask（同事务 DELETE+INSERT）\nllmArtifactRepository.save（ON CONFLICT(task_id)）\ntaskRepository.recoverInterrupted（P2 启动清扫：重启中断的 running 置 failed）\nannotationRepository 双键作用域增删查 + taskRepository.setFavorite（X4）"
   routes: "POST /tasks/:id/run（202 受理后台异步执行，运行中重复提交 409，P2）\nGET /tasks/:id/progress（{status, progress}，终态后 progress=null，P2）\nGET /tasks/:id/results（task+results+audit+llm）"
 
   routes -> runner: "executeInBackground（P2）"
@@ -92,8 +92,8 @@ api-analysis-flow: "services/api 任务运行编排（T17-A）" {
 
 web-flow: "apps/web 核心工作流（T17-B）" {
   home: "HomePage：五步向导 → taskConfigSchema.safeParse → createTask → runTask(202) → /results/:id（P2 启动即跳转）；X2 克隆基线与草稿逐域比对，预览步渲染失效分组警告"
-  results: "ResultsPage：getTaskResults（运行中 2s 轮询）+ getTaskProgress（1s 轮询，进度条+当前步骤，X1）→ 风险固定条(.risk-banner-breach) + 检验 Tab + LLM 并排(.llm-split) + 客户端导出；失败页一键重试；X2 调整参数并重跑 → /?clone"
-  history: "HistoryPage：listTasks + 重跑 mutation"
+  results: "ResultsPage：getTaskResults（运行中 2s 轮询）+ getTaskProgress（1s 轮询，进度条+当前步骤，X1）→ 风险固定条(.risk-banner-breach) + 检验 Tab + LLM 并排(.llm-split) + 客户端导出；失败页一键重试；X2 调整参数并重跑 → /?clone；X4 收藏星+复制分享链接+研究注释卡（增删）"
+  history: "HistoryPage：listTasks + 重跑 mutation；X4 收藏星标展示"
   api-client: "lib/api.ts：fetch credentials:'include'，出参一律 Zod 校验"
 
   home -> api-client

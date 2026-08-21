@@ -6,6 +6,7 @@
  */
 import {
   taskRecordSchema,
+  taskAnnotationSchema,
   resultTableSchema,
   auditTableSchema,
   exportPanelSchema,
@@ -15,6 +16,7 @@ import {
   llmTraceSchema,
   uploadedFileSchema,
   type AnalysisTemplate,
+  type TaskAnnotation,
   type TaskConfig,
   type TaskRecord,
   type ResultRow,
@@ -155,6 +157,34 @@ export function getTaskResults(taskId: string): Promise<TaskResults> {
   return request<unknown>(`/tasks/${taskId}/results`).then((raw) =>
     taskResultsSchema.parse(raw),
   );
+}
+
+/** 研究批注列表（X4，PRD L356 右栏「研究注释」） */
+export function listAnnotations(taskId: string): Promise<TaskAnnotation[]> {
+  return request<{ items: unknown[] }>(`/tasks/${taskId}/annotations`).then((raw) =>
+    raw.items.map((item) => taskAnnotationSchema.parse(item)),
+  );
+}
+
+/** 新增批注（内容 1~2000 字，服务端 trim） */
+export function createAnnotation(taskId: string, content: string): Promise<TaskAnnotation> {
+  return request<unknown>(`/tasks/${taskId}/annotations`, {
+    method: 'POST',
+    body: JSON.stringify({ content }),
+  }).then((raw) => taskAnnotationSchema.parse(raw));
+}
+
+/** 删除批注（204 无响应体） */
+export function deleteAnnotation(taskId: string, annotationId: string): Promise<null> {
+  return request<null>(`/tasks/${taskId}/annotations/${annotationId}`, { method: 'DELETE' });
+}
+
+/** 收藏切换（X4：任务本体旗标，随 taskRecord 回显） */
+export function setFavorite(taskId: string, favorited: boolean): Promise<{ favorited: boolean }> {
+  return request<unknown>(`/tasks/${taskId}/favorite`, {
+    method: 'PUT',
+    body: JSON.stringify({ favorited }),
+  }).then((raw) => z.object({ favorited: z.boolean() }).parse(raw));
 }
 
 /* ------------------------------------------------------------------ */

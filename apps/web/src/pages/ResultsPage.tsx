@@ -1,10 +1,19 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, Button, Card, Empty, Progress, Spin, Table, Tabs, Tag, Typography } from 'antd';
+import { Alert, Button, Card, Empty, Input, Progress, Space, Spin, Table, Tabs, Tag, Typography, message } from 'antd';
+import { ShareAltOutlined, StarFilled, StarOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { AuditRow, LlmOutput, ResultRow } from '@platform/schemas';
-import { getTaskProgress, getTaskResults, runTask } from '../lib/api';
+import {
+  createAnnotation,
+  deleteAnnotation,
+  getTaskProgress,
+  getTaskResults,
+  listAnnotations,
+  runTask,
+  setFavorite,
+} from '../lib/api';
 import LagCurveChart from '../components/LagCurveChart';
 import ExportPanel from '../components/ExportPanel';
 
@@ -94,6 +103,34 @@ export default function ResultsPage() {
     mutationFn: () => runTask(taskId as string),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['task-results', taskId] });
+    },
+  });
+
+  /* X4 批注 / 收藏 / 分享（hooks 无条件声明，仅终态渲染消费） */
+  const annotationsQuery = useQuery({
+    queryKey: ['task-annotations', taskId],
+    queryFn: () => listAnnotations(taskId as string),
+    enabled: taskId !== undefined && taskStatus === 'completed',
+  });
+  const [annotationDraft, setAnnotationDraft] = useState('');
+  const favorite = useMutation({
+    mutationFn: (favorited: boolean) => setFavorite(taskId as string, favorited),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['task-results', taskId] });
+    },
+  });
+  const addAnnotation = useMutation({
+    mutationFn: (content: string) => createAnnotation(taskId as string, content),
+    onSuccess: () => {
+      setAnnotationDraft('');
+      void queryClient.invalidateQueries({ queryKey: ['task-annotations', taskId] });
+    },
+    onError: (error: unknown) => message.error(error instanceof Error ? error.message : '批注保存失败'),
+  });
+  const removeAnnotation = useMutation({
+    mutationFn: (annotationId: string) => deleteAnnotation(taskId as string, annotationId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['task-annotations', taskId] });
     },
   });
 
@@ -387,10 +424,32 @@ export default function ResultsPage() {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-4)' }}>
         <h1 className="page-title font-display">{config.projectName}</h1>
-        {/* X2：参数调整入口 → 克隆向导（变更后预览步提示哪些结果失效） */}
-        <Link to={`/?clone=${task.id}`}>
-          <Button>调整参数并重跑</Button>
-        </Link>
+        <Space>
+          {/* X4 收藏：任务本体旗标，随 taskRecord 回显 */}
+          <Button
+            icon={task.favorited ? <StarFilled style={{ color: 'var(--color-watch)' }} /> : <StarOutlined />}
+            loading={favorite.isPending}
+            onClick={() => favorite.mutate(!task.favorited)}
+          >
+            {task.favorited ? '已收藏' : '收藏'}
+          </Button>
+          {/* X4 分享：单实例匿名工作区，链接即结果页 URL（复制即分享） */}
+          <Button
+            icon={<ShareAltOutlined />}
+            onClick={() => {
+              void navigator.clipboard
+                .writeText(window.location.href)
+                .then(() => message.success('分享链接已复制到剪贴板'))
+                .catch(() => message.error('复制失败，请手动复制地址栏 URL'));
+            }}
+          >
+            复制分享链接
+          </Button>
+          {/* X2：参数调整入口 → 克隆向导（变更后预览步提示哪些结果失效） */}
+          <Link to={`/?clone=${task.id}`}>
+            <Button>调整参数并重跑</Button>
+          </Link>
+        </Space>
       </div>
 
       {/* PRD：审计高风险须固定醒目提示，不得折叠隐藏 */}
@@ -503,8 +562,45 @@ export default function ResultsPage() {
           </Card>
         </div>
 
-        {/* 右栏：PRD 导出规范 01~15 编号文件（G10 抽取为 ExportPanel，与「原始导出」Tab 同源） */}
+        {/* 右栏：X4 研究注释 + PRD 导出规范 01~15 编号文件（G10 ExportPanel） */}
         <div className="rail-right">
+          <Card size="small" title="研究注释" style={{ marginBottom: 'var(--space-4)' }}>
+            {(annotationsQuery.data ?? []).length === 0 && (
+              <p className="field-hint" style={{ marginBottom: 'var(--space-3)' }}>
+                暂无批注，可记录研究备注、待复核要点或结论上下文。
+              </p>
+            )}
+            {(annotationsQuery.data ?? []).map((a) => (
+              <div key={a.id} className="annotation-item">
+                <div style={{ whiteSpace: 'pre-wrap' }}>{a.content}</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span className="field-hint font-data">{a.createdAt.slice(0, 16).replace('T', ' ')}</span>
+                  <Button size="small" danger loading={removeAnnotation.isPending} onClick={() => removeAnnotation.mutate(a.id)}>
+                    删除
+                  </Button>
+                </div>
+              </div>
+            ))}
+            <Input.TextArea
+              rows={3}
+              maxLength={2000}
+              showCount
+              value={annotationDraft}
+              placeholder="记录研究备注（最多 2000 字）"
+              onChange={(e) => setAnnotationDraft(e.target.value)}
+              style={{ marginTop: 'var(--space-3)' }}
+            />
+            <Button
+              type="primary"
+              block
+              disabled={annotationDraft.trim() === ''}
+              loading={addAnnotation.isPending}
+              onClick={() => addAnnotation.mutate(annotationDraft)}
+              style={{ marginTop: 'var(--space-2)' }}
+            >
+              添加批注
+            </Button>
+          </Card>
           <ExportPanel task={task} panel={panel} partitions={partitions} audit={audit} llm={llm} />
         </div>
       </div>
