@@ -189,12 +189,13 @@ export async function runAnalysis(config: TaskConfig, deps: RunnerDeps): Promise
     });
   }
 
-  // 2. 标准化 + 离散化管道
+  // 2. 标准化 + 离散化管道（S5：frequency 透传，周/月频先重采样再派生对齐）
   const dataset = prepareDataset({
     series: rawSeries,
     derivedSeries: config.derivedSeries,
     periods: config.periods,
     binning: config.binning,
+    frequency: config.frequency,
   });
 
   // 3. 分类变量路线：成对卡方独立性检验（检验期，参考期阈值复用）

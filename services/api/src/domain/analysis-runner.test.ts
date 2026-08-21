@@ -342,4 +342,22 @@ describe('runAnalysis · 全链路（注入 fake 依赖）', () => {
     });
     await expect(runAnalysis(baseConfig, deps)).rejects.toThrow(/上游不可达/);
   });
+
+  it('S5 周频重采样：frequency 透传引擎，分析轴收敛为周期末日（滚动窗口口径自然继承）', async () => {
+    const config: TaskConfig = {
+      ...baseConfig,
+      frequency: 'weekly',
+      rolling: { enabled: true, windowDays: 60, stepDays: 21 },
+    };
+    const { deps } = fakeDeps();
+    const outcome = await runAnalysis(config, deps);
+    // 全样本行照常产出（1 独立性 + 2 GOF + 4 连续）
+    const fullSample = outcome.results.filter((r) => r.window_end === null);
+    expect(fullSample).toHaveLength(7);
+    // 周轴下检验期仅 ~27 周 < 窗口长 60 → 无完整窗口，滚动行归零（口径自然继承）
+    expect(outcome.results.filter((r) => r.window_end !== null)).toHaveLength(0);
+    // 导出面板日期轴 = 周期末日（全年 ≤53 周，远小于日频 ~261 交易日）
+    expect(outcome.panel.dates.length).toBeLessThan(70);
+    expect(outcome.panel.dates.length).toBeGreaterThan(40);
+  });
 });

@@ -941,6 +941,11 @@ export default function HomePage() {
                     { label: '月频（monthly）', value: 'monthly' },
                   ]}
                 />
+                {frequency !== 'daily' && (
+                  <span className="field-hint">
+                    {frequency === 'weekly' ? '周频' : '月频'}：日频数据先按{frequency === 'weekly' ? ' ISO 周' : '日历月'}聚合取期末值再计算收益率与分箱；滚动窗口长度按期末观测数计。
+                  </span>
+                )}
               </div>
             </div>
           )}

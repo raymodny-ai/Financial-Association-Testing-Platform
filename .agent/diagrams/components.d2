@@ -5,12 +5,13 @@ analysis-engine: "services/analysis-engine/src" {
 
   transform: "applyTransform(values, kind)\nkind: pct_return | log_return | diff\n首点丢弃；收益率要求全正值\napplyRatioTransform(num, den)（S3）：逐点相除不丢首点，分母零拒绝"
   align: "alignSeries(seriesList) → AlignedPanel\n日期交集、升序、重复日期拒绝"
+  resample: "resampleToFrequency(seriesList, frequency)（S5）\n周频 ISO 周周一分桶 / 月频日历月前缀，桶值取期末观测\n日期标签保留期末真实日期；日频原样"
   binning: {
     quantileLinear: "quantileLinear(values, q)\nnumpy linear 等价"
     fitBinning: "fitBinning(referenceValues, config)\n观测数<箱数/零跨度抛错\n四法：quantile/equal_width/fixed_threshold（用户阈值直用，S2）/stddev（均值±σ，S2）"
     assignBins: "assignBins(values, fitted)\nvalue ≤ 阈值归下箱"
   }
-  pipeline: "prepareDataset({series, derivedSeries, periods, binning})\n→ PreparedDataset{aliases, dates, values, referenceIndex, testIndex, categories, binning}"
+  pipeline: "prepareDataset({series, derivedSeries, periods, binning, frequency?})\n周/月频先重采样再派生（S5）\n→ PreparedDataset{aliases, dates, values, referenceIndex, testIndex, categories, binning}"
   chi2: "chi2sf(statistic, df)\njstat CDF 包装，对偶数 df 闭式解验证 1e-9"
   chi-square: {
     independence: "chiSquareIndependence(observed)\nscipy correction=False 语义"
@@ -32,6 +33,7 @@ analysis-engine: "services/analysis-engine/src" {
 
   pipeline -> transform
   pipeline -> align
+  pipeline -> resample
   pipeline -> binning
   chi-square -> chi2
   chi-square-dataset -> chi-square

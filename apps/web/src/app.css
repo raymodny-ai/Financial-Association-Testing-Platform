@@ -56,6 +56,14 @@
   margin-bottom: var(--space-1);
 }
 
+/* 字段级提示（S5 频率语义等中性提示；叠加 -error 变错误色） */
+.field-hint {
+  display: block;
+  color: var(--color-text-secondary);
+  font-size: var(--text-caption);
+  margin-top: var(--space-1);
+}
+
 /* 字段级错误提示（S2 固定阈值输入校验） */
 .field-hint-error {
   display: block;

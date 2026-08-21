@@ -8,6 +8,7 @@
 export * from './types';
 export * from './transform';
 export * from './align';
+export * from './resample';
 export * from './binning';
 export * from './pipeline';
 export * from './chi2';

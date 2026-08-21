@@ -2,6 +2,7 @@
  * 标准化 + 离散化管道编排（T09）。
  *
  * 处理顺序（PRD 方法学）：
+ * 0. 周/月频重采样（S5：原始序列按期末值聚合，日频或缺省不变换）
  * 1. 派生序列计算（收益率/差分各自丢弃首点；比值按公共日期逐点相除不丢首点，S3）
  * 2. 全序列日期对齐（交集、升序）
  * 3. 参考期 / 检验期在对齐轴上定位（闭区间索引）
@@ -12,6 +13,7 @@
 import type { BinningConfig, DerivedSeries, PeriodSplit } from '@platform/schemas';
 import { alignSeries } from './align.js';
 import { assignBins, fitBinning, type FittedBinning } from './binning.js';
+import { resampleToFrequency, type ResampleFrequency } from './resample.js';
 import { applyRatioTransform, applyTransform } from './transform.js';
 import type { NumericSeries } from './types.js';
 
@@ -20,6 +22,8 @@ export interface PrepareDatasetInput {
   derivedSeries: DerivedSeries[];
   periods: PeriodSplit;
   binning: BinningConfig;
+  /** 分析频率（S5）：weekly/monthly 时先对原始序列重采样；缺省日频 */
+  frequency?: ResampleFrequency;
 }
 
 export interface PreparedDataset {
@@ -60,8 +64,15 @@ function locateWindow(dates: string[], start: string, end: string): [number, num
 export function prepareDataset(input: PrepareDatasetInput): PreparedDataset {
   const { derivedSeries, periods, binning } = input;
 
+  // 0. 周/月频重采样（S5）：在派生变换之前聚合，周/月收益率自然为期末价口径；
+  //    重采样后日期轴仍为真实观测日，参考/检验期与事件标签定位零适配。
+  const baseSeries: NumericSeries[] =
+    input.frequency === undefined || input.frequency === 'daily'
+      ? input.series
+      : resampleToFrequency(input.series, input.frequency);
+
   // 别名校验：原始 + 派生全局唯一，派生源必须存在
-  const rawByAlias = new Map(input.series.map((s) => [s.alias, s]));
+  const rawByAlias = new Map(baseSeries.map((s) => [s.alias, s]));
   const allAliases = [...rawByAlias.keys(), ...derivedSeries.map((d) => d.alias)];
   if (new Set(allAliases).size !== allAliases.length) {
     throw new RangeError('序列别名冲突：原始序列与派生序列别名必须全局唯一');
@@ -110,7 +121,7 @@ export function prepareDataset(input: PrepareDatasetInput): PreparedDataset {
   });
 
   // 2. 对齐（原始在前、派生在后，保持别名稳定顺序）
-  const aligned = alignSeries([...input.series, ...computed]);
+  const aligned = alignSeries([...baseSeries, ...computed]);
 
   // 3. 参考期 / 检验期定位
   const referenceIndex = locateWindow(aligned.dates, periods.referenceStart, periods.referenceEnd);

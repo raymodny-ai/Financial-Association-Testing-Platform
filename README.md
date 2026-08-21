@@ -43,8 +43,8 @@
 │   ├── shared                  # AppError 错误族
 │   └── ui                      # 设计 Token 唯一来源（tokens.ts / tokens.css）
 ├── services/
-│   ├── analysis-engine         # 纯函数统计/审计引擎（无 IO、无框架依赖，141 测试）
-│   └── api                     # Express 5 网关：任务编排 / 数据适配 / LLM 推理（86 测试）
+│   ├── analysis-engine         # 纯函数统计/审计引擎（无 IO、无框架依赖，197 测试）
+│   └── api                     # Express 5 网关：任务编排 / 数据适配 / LLM 推理（92 测试）
 ├── prompts/                    # LLM 提示词模板 + output_schema.json（版本号入 trace）
 ├── infra/db                    # PostgreSQL 迁移 SQL + 本地免管理员启停脚本
 ├── tests/fixtures              # 黄金基准集 stat-reference.json（scipy/numpy 参考值）
@@ -114,14 +114,14 @@ pnpm --filter @platform/web dev
 ## ✅ 常用命令
 
 ```bash
-pnpm test                # 全仓测试（5 包共 324 例）
+pnpm test                # 全仓测试（5 包共 335 例）
 pnpm typecheck           # 全仓 TypeScript 严格检查
 pnpm lint                # ESLint
 pnpm build               # 全仓构建（web: vite / api: tsup）
 pnpm --filter @platform/api db:migrate   # 应用数据库迁移（幂等）
 ```
 
-测试矩阵：analysis-engine **141** · api **86**（含 PostgreSQL 集成测试与审计注入测试）· schemas **20** · ui **7** · shared **4**。
+测试矩阵：analysis-engine **197** · api **92**（含 PostgreSQL 集成测试与审计注入测试）· schemas **35** · ui **7** · shared **4**。
 
 ---
 

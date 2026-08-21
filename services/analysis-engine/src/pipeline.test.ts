@@ -179,4 +179,161 @@ describe('prepareDataset', () => {
       }),
     ).toThrow(/参考期/);
   });
+
+  // S5 · 周频/月频重采样：对原始序列先重采样（期末值口径）再派生与对齐
+  describe('S5 · frequency 重采样', () => {
+    it('weekly：原始序列按 ISO 周聚合取期末值，参考/检验期在周轴上定位', () => {
+      // 三周双序列（参考期需 ≥2 个周观测才能拟合 2 桶分箱，fitBinning 既有守卫）
+      const threeWeeks: NumericSeries[] = [
+        {
+          alias: 'A',
+          points: [
+            { date: '2024-01-01', value: 99 },
+            { date: '2024-01-02', value: 98 },
+            { date: '2024-01-05', value: 100 }, // 周 1 期末（周五）
+            { date: '2024-01-08', value: 105 },
+            { date: '2024-01-12', value: 110 }, // 周 2 期末（与周五隔周末分属不同桶）
+            { date: '2024-01-19', value: 90 }, // 周 3 期末（回落）
+          ],
+        },
+        {
+          alias: 'B',
+          points: [
+            { date: '2024-01-05', value: 200 },
+            { date: '2024-01-12', value: 220 },
+            { date: '2024-01-19', value: 250 },
+          ],
+        },
+      ];
+      const result = prepareDataset({
+        series: threeWeeks,
+        derivedSeries: [],
+        periods: {
+          referenceStart: '2024-01-01',
+          referenceEnd: '2024-01-12',
+          testStart: '2024-01-13',
+          testEnd: '2024-01-19',
+        },
+        binning,
+        frequency: 'weekly',
+      });
+      // 日期轴 = 各周期末的真实观测日；周五与下周一不得合并（跨周边界）
+      expect(result.dates).toEqual(['2024-01-05', '2024-01-12', '2024-01-19']);
+      const aIndex = result.aliases.indexOf('A');
+      const bIndex = result.aliases.indexOf('B');
+      expect(result.values[aIndex]).toEqual([100, 110, 90]); // 期末值（周内前值被覆盖）
+      expect(result.values[bIndex]).toEqual([200, 220, 250]);
+      // 参考期覆盖周 1+周 2；检验期覆盖周 3（日频日期区间直接命中周轴）
+      expect(result.referenceIndex).toEqual([0, 1]);
+      expect(result.testIndex).toEqual([2, 2]);
+    });
+
+    it('weekly：参考期含 2 周时阈值=参考期周值中位数，检验期复用', () => {
+      const threeWeeks: NumericSeries[] = [
+        {
+          alias: 'A',
+          points: [
+            { date: '2024-01-05', value: 100 },
+            { date: '2024-01-12', value: 110 },
+            { date: '2024-01-19', value: 90 },
+          ],
+        },
+      ];
+      const result = prepareDataset({
+        series: threeWeeks,
+        derivedSeries: [],
+        periods: {
+          referenceStart: '2024-01-01',
+          referenceEnd: '2024-01-12',
+          testStart: '2024-01-13',
+          testEnd: '2024-01-19',
+        },
+        binning,
+        frequency: 'weekly',
+      });
+      expect(result.dates).toEqual(['2024-01-05', '2024-01-12', '2024-01-19']);
+      expect(result.referenceIndex).toEqual([0, 1]);
+      expect(result.testIndex).toEqual([2, 2]);
+      // 参考期周值 [100,110] → 中位数阈值 105；全轴 [100,110,90] → [0,1,0]
+      expect(result.binning['A']!.thresholds).toEqual([105]);
+      expect(result.categories['A']).toEqual([0, 1, 0]);
+    });
+
+    it('weekly：派生收益率按周期末价计算（周收益 = 期末/上期末 − 1 口径）', () => {
+      const weekly: NumericSeries[] = [
+        {
+          alias: 'A',
+          points: [
+            { date: '2024-01-01', value: 98 },
+            { date: '2024-01-05', value: 100 }, // 周 1 期末 100（对齐后丢弃）
+            { date: '2024-01-08', value: 105 },
+            { date: '2024-01-12', value: 110 }, // 周 2 期末 110（+10%）
+            { date: '2024-01-15', value: 112 },
+            { date: '2024-01-19', value: 115.5 }, // 周 3 期末 115.5（+5%）
+            { date: '2024-01-22', value: 128 },
+            { date: '2024-01-26', value: 138.6 }, // 周 4 期末（+20%，参考期周收益 [0.1, 0.05] 非零跨度）
+          ],
+        },
+      ];
+      const result = prepareDataset({
+        series: weekly,
+        derivedSeries: [{ alias: 'C', sourceAlias: 'A', transform: 'pct_return' }],
+        periods: {
+          referenceStart: '2024-01-01',
+          referenceEnd: '2024-01-19',
+          testStart: '2024-01-20',
+          testEnd: '2024-01-26',
+        },
+        binning,
+        frequency: 'weekly',
+      });
+      // 周轴 [01-05,01-12,01-19,01-26]；C 丢首周 → 对齐轴 [01-12,01-19,01-26]
+      expect(result.dates).toEqual(['2024-01-12', '2024-01-19', '2024-01-26']);
+      const cIndex = result.aliases.indexOf('C');
+      expect(result.values[cIndex]![0]).toBeCloseTo(0.1, 12);
+      expect(result.values[cIndex]![1]).toBeCloseTo(0.05, 12);
+      expect(result.values[cIndex]![2]).toBeCloseTo(0.2, 12);
+      expect(result.referenceIndex).toEqual([0, 1]);
+      expect(result.testIndex).toEqual([2, 2]);
+    });
+
+    it('monthly：原始序列按日历月聚合取期末值', () => {
+      const monthly: NumericSeries[] = [
+        {
+          alias: 'A',
+          points: [
+            { date: '2024-01-15', value: 10 },
+            { date: '2024-01-31', value: 12 },
+            { date: '2024-02-01', value: 13 },
+            { date: '2024-02-15', value: 14 },
+            { date: '2024-03-10', value: 16 },
+          ],
+        },
+      ];
+      const result = prepareDataset({
+        series: monthly,
+        derivedSeries: [],
+        periods: {
+          referenceStart: '2024-01-01',
+          referenceEnd: '2024-02-15',
+          testStart: '2024-02-16',
+          testEnd: '2024-03-31',
+        },
+        binning,
+        frequency: 'monthly',
+      });
+      expect(result.dates).toEqual(['2024-01-31', '2024-02-15', '2024-03-10']);
+      expect(result.values[0]).toEqual([12, 14, 16]);
+      expect(result.referenceIndex).toEqual([0, 1]);
+      expect(result.testIndex).toEqual([2, 2]);
+    });
+
+    it('daily（显式）与缺省一致：不做重采样', () => {
+      const explicit = prepareDataset({ series, derivedSeries: [], periods, binning, frequency: 'daily' });
+      const omitted = prepareDataset({ series, derivedSeries: [], periods, binning });
+      expect(explicit.dates).toEqual(omitted.dates);
+      expect(explicit.values).toEqual(omitted.values);
+      expect(explicit.dates).toHaveLength(6);
+    });
+  });
 });
