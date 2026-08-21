@@ -56,6 +56,27 @@
   margin-bottom: var(--space-1);
 }
 
+/* 检验选项步方法说明（X3）：跨满表单网格，双列紧凑列表 */
+.method-guide {
+  grid-column: 1 / -1;
+}
+
+.method-guide ul {
+  margin: 0;
+  padding-left: var(--space-5);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--space-1) var(--space-4);
+  color: var(--color-text-secondary);
+  font-size: var(--text-caption);
+  line-height: 1.55;
+}
+
+.method-guide strong {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
 /* ------------------------------------------------------------------ */
 /* 结果页左 / 右栏卡片                                                 */
 /* ------------------------------------------------------------------ */

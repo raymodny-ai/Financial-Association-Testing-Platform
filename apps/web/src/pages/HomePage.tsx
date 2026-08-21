@@ -108,6 +108,19 @@ const DEFAULT_ROLLING_METHODS: RollingMethod[] = ROLLING_METHOD_OPTIONS
   .filter((o) => o.value !== 'hsic')
   .map((o) => o.value);
 
+/** 统计方法说明与适用时机（PRD UI/UX：所有统计方法配简短说明，X3） */
+const METHOD_GUIDE: Array<{ name: string; when: string }> = [
+  { name: '卡方独立性', when: '判断两变量涨跌状态是否关联（分箱后列联表）；期望频数不足时自动警告。' },
+  { name: '卡方拟合优度（GOF）', when: '单变量检验期状态分布是否偏离参考期期望概率（分布漂移）；参考期从未出现的状态自动跳过该变量。' },
+  { name: 'Pearson 相关', when: '线性相关强度；对离群点敏感，适合近正态的连续序列。' },
+  { name: 'Spearman 相关', when: '单调相关（基于秩）；对离群点与非正态稳健，适合肥尾金融序列。' },
+  { name: '互信息（MI）', when: '捕捉任意形式依赖（含非线性）；置换检验定 p 值，计算量中等。' },
+  { name: 'HSIC 核独立性', when: '非参数检验任意依赖；计算量最大（O(n²)×置换），建议中小样本。' },
+  { name: '滞后扫描（pearson_lag）', when: '探索领先-滞后关系；最大滞后期设 >0 时生效，单独成批校正。' },
+  { name: '滚动窗口重算', when: '观察关联性随时间的稳定性；耗时随窗口数×方法数成倍增长。' },
+  { name: '多重检验校正', when: '多变量对/多方法时控制假阳性：BH-FDR 平衡，Bonferroni 最严，探索性分析不建议不校正。' },
+];
+
 /** 派生序列变换选项（与契约 derivedSeriesSchema.transform 同源，G11） */
 const TRANSFORM_OPTIONS: Array<{ value: DerivedSeries['transform']; label: string }> = [
   { value: 'pct_return', label: '百分比收益率（pct_return）' },
@@ -976,6 +989,16 @@ export default function HomePage() {
               <div>
                 <span className="field-label">最大滞后期</span>
                 <InputNumber value={maxLag} min={0} max={60} style={{ width: '100%' }} onChange={(v) => setMaxLag(v ?? DEFAULTS.maxLag)} />
+              </div>
+              <div className="method-guide">
+                <span className="field-label">方法说明与何时使用</span>
+                <ul>
+                  {METHOD_GUIDE.map((m) => (
+                    <li key={m.name}>
+                      <strong>{m.name}</strong>：{m.when}
+                    </li>
+                  ))}
+                </ul>
               </div>
             </div>
           )}
