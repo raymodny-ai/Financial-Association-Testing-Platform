@@ -3,6 +3,7 @@ import {
   analysisTemplateSchema,
   auditRowSchema,
   createTemplateRequestSchema,
+  derivedSeriesSchema,
   llmContextSchema,
   llmOutputSchema,
   resultRowSchema,
@@ -178,6 +179,34 @@ describe('taskConfigSchema 业务规则', () => {
       ],
     };
     expect(() => taskConfigSchema.parse(bad)).toThrow(/字段映射不得为空/);
+  });
+});
+
+describe('derivedSeriesSchema 比值变换守卫（S3）', () => {
+  it('ratio 变换携带 denominatorAlias 通过', () => {
+    const parsed = derivedSeriesSchema.parse({
+      alias: 'R',
+      sourceAlias: 'A',
+      denominatorAlias: 'B',
+      transform: 'ratio',
+    });
+    expect(parsed.denominatorAlias).toBe('B');
+  });
+
+  it('ratio 变换缺 denominatorAlias 拒绝', () => {
+    expect(() =>
+      derivedSeriesSchema.parse({ alias: 'R', sourceAlias: 'A', transform: 'ratio' }),
+    ).toThrow(/分母序列/);
+  });
+
+  it('非 ratio 变换携带 denominatorAlias 拒绝', () => {
+    expect(() =>
+      derivedSeriesSchema.parse({ alias: 'C', sourceAlias: 'A', denominatorAlias: 'B', transform: 'pct_return' }),
+    ).toThrow(/分母序列/);
+  });
+
+  it('既有单源变换不带 denominatorAlias 保持通过', () => {
+    expect(derivedSeriesSchema.parse({ alias: 'C', sourceAlias: 'A', transform: 'diff' }).transform).toBe('diff');
   });
 });
 

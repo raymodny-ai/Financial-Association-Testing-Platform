@@ -111,6 +111,48 @@ describe('prepareDataset', () => {
     ).toThrow(/GHOST/);
   });
 
+  it('比值序列（S3）：R = A/B 按公共日期逐点相除，不丢首点', () => {
+    const result = prepareDataset({
+      series,
+      derivedSeries: [{ alias: 'R', sourceAlias: 'A', denominatorAlias: 'B', transform: 'ratio' }],
+      periods,
+      binning,
+    });
+    // 对齐轴 = A∩B（B 缺 01-01）；R 恰好覆盖全部对齐日期（无首点丢弃）
+    expect(result.dates).toEqual([
+      '2024-01-02',
+      '2024-01-03',
+      '2024-01-08',
+      '2024-01-09',
+      '2024-01-10',
+      '2024-01-11',
+    ]);
+    const rIndex = result.aliases.indexOf('R');
+    expect(rIndex).toBeGreaterThan(-1);
+    expect(result.values[rIndex]).toHaveLength(6);
+    expect(result.values[rIndex]![0]).toBeCloseTo(105 / 200, 12);
+    expect(result.values[rIndex]![5]).toBeCloseTo(140 / 250, 12);
+  });
+
+  it('比值序列（S3）：分母序列不存在或与分子同名校验报错', () => {
+    expect(() =>
+      prepareDataset({
+        series,
+        derivedSeries: [{ alias: 'R', sourceAlias: 'A', denominatorAlias: 'GHOST', transform: 'ratio' }],
+        periods,
+        binning,
+      }),
+    ).toThrow(/GHOST/);
+    expect(() =>
+      prepareDataset({
+        series,
+        derivedSeries: [{ alias: 'R', sourceAlias: 'A', denominatorAlias: 'A', transform: 'ratio' }],
+        periods,
+        binning,
+      }),
+    ).toThrow(/同一/);
+  });
+
   it('别名冲突（派生与原始同名）抛错', () => {
     expect(() =>
       prepareDataset({

@@ -51,13 +51,19 @@ export const dataSourceSchema = z.discriminatedUnion('kind', [
 ]);
 export type DataSource = z.infer<typeof dataSourceSchema>;
 
-/** 派生序列定义（如收益率、差分） */
-export const derivedSeriesSchema = z.object({
-  alias: z.string().min(1).max(64),
-  /** 基础序列别名 */
-  sourceAlias: z.string().min(1).max(64),
-  transform: z.enum(['pct_return', 'log_return', 'diff']),
-});
+/** 派生序列定义（如收益率、差分、比值；ratio 需配分母序列，S3） */
+export const derivedSeriesSchema = z
+  .object({
+    alias: z.string().min(1).max(64),
+    /** 基础序列别名（ratio 时为分子） */
+    sourceAlias: z.string().min(1).max(64),
+    transform: z.enum(['pct_return', 'log_return', 'diff', 'ratio']),
+    /** 比值变换的分母序列别名（S3）：ratio 必填，其余变换禁用 */
+    denominatorAlias: z.string().min(1).max(64).optional(),
+  })
+  .refine((d) => (d.transform === 'ratio') === (d.denominatorAlias !== undefined), {
+    message: '比值变换（ratio）须携带分母序列（denominatorAlias），且仅限 ratio 使用',
+  });
 export type DerivedSeries = z.infer<typeof derivedSeriesSchema>;
 
 /** 参考期 / 检验期划分（阈值在参考期固定、检验期复用） */

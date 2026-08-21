@@ -121,11 +121,12 @@ const METHOD_GUIDE: Array<{ name: string; when: string }> = [
   { name: '多重检验校正', when: '多变量对/多方法时控制假阳性：BH-FDR 平衡，Bonferroni 最严，探索性分析不建议不校正。' },
 ];
 
-/** 派生序列变换选项（与契约 derivedSeriesSchema.transform 同源，G11） */
+/** 派生序列变换选项（与契约 derivedSeriesSchema.transform 同源，G11；ratio 为 S3 扩展） */
 const TRANSFORM_OPTIONS: Array<{ value: DerivedSeries['transform']; label: string }> = [
   { value: 'pct_return', label: '百分比收益率（pct_return）' },
   { value: 'log_return', label: '对数收益率（log_return）' },
   { value: 'diff', label: '一阶差分（diff）' },
+  { value: 'ratio', label: '比值（ratio：分子/分母）' },
 ];
 
 export default function HomePage() {
@@ -238,13 +239,21 @@ export default function HomePage() {
       if (s.dualFileId !== undefined && (s.dualDateCol === undefined || s.dualCloseCol === undefined)) return false;
       return s.fileId !== undefined && s.dateCol !== undefined && s.closeCol !== undefined;
     }) &&
-    // 派生序列：别名非空且与原始/其他派生不冲突，基础序列必须存在（引擎同名报错前置拦截）
+    // 派生序列：别名非空且与原始/其他派生不冲突，基础序列必须存在；ratio 另需分母序列存在且非分子（引擎同名报错前置拦截）
     new Set(derived.map((d) => d.alias.trim())).size === derived.length &&
     derived.every((d) => {
       const alias = d.alias.trim();
       if (alias === '') return false;
       if (sources.some((s) => s.alias.trim() === alias)) return false;
-      return sources.some((s) => s.alias.trim() === d.sourceAlias);
+      if (!sources.some((s) => s.alias.trim() === d.sourceAlias)) return false;
+      if (d.transform === 'ratio') {
+        return (
+          d.denominatorAlias !== undefined &&
+          d.denominatorAlias !== d.sourceAlias &&
+          sources.some((s) => s.alias.trim() === d.denominatorAlias)
+        );
+      }
+      return true;
     });
 
   const step1Valid =
@@ -795,10 +804,42 @@ export default function HomePage() {
                             style={{ width: '100%' }}
                             options={TRANSFORM_OPTIONS}
                             onChange={(value) =>
-                              setDerived((prev) => prev.map((x, i) => (i === index ? { ...x, transform: value } : x)))
+                              setDerived((prev) =>
+                                prev.map((x, i) => {
+                                  if (i !== index) return x;
+                                  const next: DerivedSeries = { ...x, transform: value };
+                                  if (value === 'ratio') {
+                                    // S3：切入比值变换时预置分母（默认选第一个非分子序列）
+                                    next.denominatorAlias =
+                                      x.denominatorAlias ??
+                                      sources.map((s) => s.alias.trim()).find((a) => a !== '' && a !== x.sourceAlias) ??
+                                      x.sourceAlias;
+                                  } else {
+                                    delete next.denominatorAlias;
+                                  }
+                                  return next;
+                                }),
+                              )
                             }
                           />
                         </div>
+                        {d.transform === 'ratio' && (
+                          <div>
+                            <span className="field-label">分母序列（ratio）</span>
+                            <Select
+                              value={d.denominatorAlias}
+                              placeholder="选择分母序列"
+                              style={{ width: '100%' }}
+                              onChange={(value) =>
+                                setDerived((prev) => prev.map((x, i) => (i === index ? { ...x, denominatorAlias: value } : x)))
+                              }
+                              options={sources
+                                .map((s) => s.alias.trim())
+                                .filter((alias) => alias !== '')
+                                .map((alias) => ({ label: alias, value: alias }))}
+                            />
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -1029,7 +1070,7 @@ export default function HomePage() {
                     { key: 'project', label: '项目名称', children: projectName },
                     { key: 'question', label: '研究问题', children: researchQuestion.trim() === '' ? '未指定（由项目名派生）' : researchQuestion.trim() },
                     { key: 'sources', label: '数据源', children: sources.map((s) => `${s.alias}（${s.kind === 'ticker' ? s.ticker : s.filename ?? 'CSV'}${s.kind === 'ticker' && s.dualProvider !== '' ? `，双源审计:${s.dualProvider}` : ''}${s.kind === 'upload' && s.dualFileId !== undefined ? `，双源审计:${s.dualFilename ?? 'CSV'}` : ''}）`).join('、') },
-                    { key: 'derived', label: '派生序列', children: derived.length === 0 ? '无' : derived.map((d) => `${d.alias} ← ${d.sourceAlias}（${TRANSFORM_OPTIONS.find((t) => t.value === d.transform)?.label ?? d.transform}）`).join('、') },
+                    { key: 'derived', label: '派生序列', children: derived.length === 0 ? '无' : derived.map((d) => `${d.alias} ← ${d.sourceAlias}${d.transform === 'ratio' ? `/${d.denominatorAlias ?? '?'}` : ''}（${TRANSFORM_OPTIONS.find((t) => t.value === d.transform)?.label ?? d.transform}）`).join('、') },
                     { key: 'range', label: '样本区间', children: `${startDate?.format(DATE_FORMAT) ?? ''} ~ ${endDate?.format(DATE_FORMAT) ?? ''}` },
                     { key: 'periods', label: '参考期 / 检验期', children: `${referenceStart?.format(DATE_FORMAT) ?? ''} ~ ${referenceEnd?.format(DATE_FORMAT) ?? ''} / ${testStart?.format(DATE_FORMAT) ?? ''} ~ ${testEnd?.format(DATE_FORMAT) ?? ''}` },
                     { key: 'binning', label: '分箱', children: `${binningMethod} × ${bins} 桶` },

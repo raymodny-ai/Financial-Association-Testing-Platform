@@ -67,6 +67,7 @@ const TRANSFORM_TEXT = {
   pct_return: '百分比收益率变换',
   log_return: '对数收益率变换',
   diff: '一阶差分变换',
+  ratio: '比值变换',
 } as const;
 
 /** 弱效应阈值：|effect_size| < 0.1 视为弱（Cramer's V / 相关系数同口径） */
@@ -226,7 +227,11 @@ function variableDefinitions(config: TaskConfig): string {
       : `${ds.alias}：上传文件序列，fileId=${ds.fileId}，字段映射=${JSON.stringify(ds.columnMapping)}`,
   );
   for (const d of config.derivedSeries) {
-    lines.push(`${d.alias} = ${d.sourceAlias} 经${TRANSFORM_TEXT[d.transform]}派生`);
+    lines.push(
+      d.transform === 'ratio'
+        ? `${d.alias} = ${d.sourceAlias}/${d.denominatorAlias} 经比值变换派生（S3）`
+        : `${d.alias} = ${d.sourceAlias} 经${TRANSFORM_TEXT[d.transform]}派生`,
+    );
   }
   return lines.join('\n');
 }

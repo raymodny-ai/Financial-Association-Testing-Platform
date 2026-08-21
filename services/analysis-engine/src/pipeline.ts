@@ -2,7 +2,7 @@
  * 标准化 + 离散化管道编排（T09）。
  *
  * 处理顺序（PRD 方法学）：
- * 1. 派生序列计算（收益率/差分，各自丢弃首点）
+ * 1. 派生序列计算（收益率/差分各自丢弃首点；比值按公共日期逐点相除不丢首点，S3）
  * 2. 全序列日期对齐（交集、升序）
  * 3. 参考期 / 检验期在对齐轴上定位（闭区间索引）
  * 4. 分箱阈值仅用参考期拟合，全日期轴分箱（检验期复用阈值）
@@ -12,7 +12,7 @@
 import type { BinningConfig, DerivedSeries, PeriodSplit } from '@platform/schemas';
 import { alignSeries } from './align.js';
 import { assignBins, fitBinning, type FittedBinning } from './binning.js';
-import { applyTransform } from './transform.js';
+import { applyRatioTransform, applyTransform } from './transform.js';
 import type { NumericSeries } from './types.js';
 
 export interface PrepareDatasetInput {
@@ -70,11 +70,35 @@ export function prepareDataset(input: PrepareDatasetInput): PreparedDataset {
     if (!rawByAlias.has(derived.sourceAlias)) {
       throw new RangeError(`派生序列 ${derived.alias} 引用的源序列 ${derived.sourceAlias} 不存在`);
     }
+    if (derived.transform === 'ratio') {
+      if (derived.denominatorAlias === derived.sourceAlias) {
+        throw new RangeError(`派生序列 ${derived.alias} 的分子与分母不得为同一序列（${derived.sourceAlias}）`);
+      }
+      if (!rawByAlias.has(derived.denominatorAlias!)) {
+        throw new RangeError(`派生序列 ${derived.alias} 引用的分母序列 ${derived.denominatorAlias} 不存在`);
+      }
+    }
   }
 
-  // 1. 派生序列
+  // 1. 派生序列（ratio：公共日期逐点相除不丢首点；其余：单源变换丢首点，S3）
   const computed: NumericSeries[] = derivedSeries.map((derived) => {
     const source = sortedPoints(rawByAlias.get(derived.sourceAlias)!);
+    if (derived.transform === 'ratio') {
+      const denominator = sortedPoints(rawByAlias.get(derived.denominatorAlias!)!);
+      const denByDate = new Map(denominator.map((p) => [p.date, p.value]));
+      const common = source.filter((p) => denByDate.has(p.date));
+      if (common.length === 0) {
+        throw new RangeError(`派生序列 ${derived.alias}：分子与分母无公共日期，无法构造比值`);
+      }
+      const ratios = applyRatioTransform(
+        common.map((p) => p.value),
+        common.map((p) => denByDate.get(p.date)!),
+      );
+      return {
+        alias: derived.alias,
+        points: common.map((p, i) => ({ date: p.date, value: ratios[i]! })),
+      };
+    }
     const transformed = applyTransform(
       source.map((p) => p.value),
       derived.transform,
