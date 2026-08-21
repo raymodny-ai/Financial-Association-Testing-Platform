@@ -153,3 +153,81 @@ export function goodnessOfFitScan(dataset: PreparedDataset): GoodnessOfFitReport
 
   return { rows, skipped };
 }
+
+export interface EventAssociationRow {
+  eventName: string;
+  eventDate: string;
+  alias: string;
+  /** 剪枝后的观测列联表（行：事件日/非事件日，列：固定箱空间） */
+  observedTable: number[][];
+  result: ChiSquareResult;
+  /** 剪枝说明；无剪枝为 null */
+  notes: string | null;
+}
+
+export interface EventAssociationReport {
+  rows: EventAssociationRow[];
+  /** 退化跳过说明：事件日不在检验期/日期轴，或剪枝后不足 2×2 */
+  skipped: string[];
+}
+
+/**
+ * 事件标签关联扫描（S4，PRD 首期范围「事件标签」）：
+ * 逐事件×逐别名构造「事件日 vs 非事件日」2×K 列联表（检验期、固定箱空间），
+ * 卡方独立性检验事件与序列状态是否关联。
+ * 事件日不在样本日期轴或不在检验期时跳过记入 skipped；
+ * 剪枝后不足 2×2（事件日与非事件日状态无差异）同样记 skipped 不阻塞其余别名。
+ */
+export function eventAssociationScan(
+  dataset: PreparedDataset,
+  events: ReadonlyArray<{ name: string; date: string }>,
+): EventAssociationReport {
+  const [testStart, testEnd] = dataset.testIndex;
+  const rows: EventAssociationRow[] = [];
+  const skipped: string[] = [];
+
+  for (const event of events) {
+    const idx = dataset.dates.indexOf(event.date);
+    if (idx < 0) {
+      skipped.push(`${event.name}：日期 ${event.date} 不在样本日期轴内`);
+      continue;
+    }
+    if (idx < testStart || idx > testEnd) {
+      skipped.push(`${event.name}：日期 ${event.date} 不在检验期内（事件关联仅在检验期检验）`);
+      continue;
+    }
+
+    for (const alias of dataset.aliases) {
+      const labels = dataset.binning[alias]!.labels;
+      const categories = dataset.categories[alias]!;
+      const eventCounts = new Array<number>(labels.length).fill(0);
+      const nonEventCounts = new Array<number>(labels.length).fill(0);
+      for (let k = testStart; k <= testEnd; k += 1) {
+        if (k === idx) eventCounts[categories[k]!]! += 1;
+        else nonEventCounts[categories[k]!]! += 1;
+      }
+      const rowLabels = ['事件日', '非事件日'];
+      const pruned = pruneZeroMargins([eventCounts, nonEventCounts], rowLabels, labels);
+      if (pruned.table.length < 2 || pruned.table[0]!.length < 2) {
+        skipped.push(
+          `${event.name}×${alias}：事件日与非事件日状态无差异（剪枝后不足 2×2），无法检验`,
+        );
+        continue;
+      }
+      const notes =
+        pruned.removedRows.length > 0 || pruned.removedCols.length > 0
+          ? `检验期零边际剪枝：行 [${pruned.removedRows.join(', ')}]，${alias} 移除箱 [${pruned.removedCols.join(', ')}]`
+          : null;
+      rows.push({
+        eventName: event.name,
+        eventDate: event.date,
+        alias,
+        observedTable: pruned.table,
+        result: chiSquareIndependence(pruned.table),
+        notes,
+      });
+    }
+  }
+
+  return { rows, skipped };
+}

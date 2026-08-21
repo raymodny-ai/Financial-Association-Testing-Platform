@@ -4,7 +4,7 @@
  * 零边际箱（检验期未出现）自动剪枝并记录 notes。
  */
 import { describe, expect, it } from 'vitest';
-import { goodnessOfFitScan, pairwiseChiSquare } from './chi-square-dataset.js';
+import { eventAssociationScan, goodnessOfFitScan, pairwiseChiSquare } from './chi-square-dataset.js';
 import type { PreparedDataset } from './pipeline.js';
 
 /** 两序列 3 箱，检验期 6 观测；A 的 bin 2 在检验期未出现（触发剪枝） */
@@ -114,5 +114,70 @@ describe('goodnessOfFitScan · PreparedDataset 接缝', () => {
     // A 的 bin_3 检验期未出现但参考期有 → 保留 0 观测
     expect(report.rows[0]!.observed).toHaveLength(3);
     expect(report.rows[0]!.observed[2]).toBe(0);
+  });
+});
+
+/** S4 · 事件标签：事件日 vs 非事件日状态分布卡方独立性（检验期） */
+describe('eventAssociationScan · PreparedDataset 接缝（S4）', () => {
+  it('事件日在检验期：每别名一行 2×K 列联表，统计量手算对拍', () => {
+    // 事件 t3（idx=5）：A 事件日类别 0 → [[1,0,0],[2,3,0]]，bin_3 列全零剪枝后 [[1,0],[2,3]]
+    // χ²=1.2（df=1）；B 事件日类别 1 → [[0,1,0],[2,1,2]] 无剪枝，χ²=2.4（df=2）
+    const report = eventAssociationScan(dataset, [{ name: 'E1', date: 't3' }]);
+    expect(report.skipped).toHaveLength(0);
+    expect(report.rows.map((r) => r.alias)).toEqual(['A', 'B']);
+    const rowA = report.rows[0]!;
+    expect(rowA.eventName).toBe('E1');
+    expect(rowA.observedTable).toEqual([
+      [1, 0],
+      [2, 3],
+    ]);
+    expect(rowA.result.statistic).toBeCloseTo(1.2, 9);
+    expect(rowA.result.degreesOfFreedom).toBe(1);
+    expect(rowA.notes).toContain('剪枝');
+    const rowB = report.rows[1]!;
+    expect(rowB.result.statistic).toBeCloseTo(2.4, 9);
+    expect(rowB.result.degreesOfFreedom).toBe(2);
+    expect(rowB.notes).toBeNull();
+  });
+
+  it('多事件×多别名：行数 = 事件数 × 别名数', () => {
+    const report = eventAssociationScan(dataset, [
+      { name: 'E1', date: 't3' },
+      { name: 'E2', date: 't5' },
+    ]);
+    expect(report.rows).toHaveLength(4);
+    expect(report.rows.map((r) => `${r.eventName}:${r.alias}`)).toEqual([
+      'E1:A',
+      'E1:B',
+      'E2:A',
+      'E2:B',
+    ]);
+  });
+
+  it('事件日期在参考期：跳过并记入 skipped（事件关联仅在检验期检验）', () => {
+    const report = eventAssociationScan(dataset, [{ name: 'E1', date: 'd2' }]);
+    expect(report.rows).toHaveLength(0);
+    expect(report.skipped).toHaveLength(1);
+    expect(report.skipped[0]).toContain('检验期');
+  });
+
+  it('事件日期不在样本日期轴：跳过并记入 skipped', () => {
+    const report = eventAssociationScan(dataset, [{ name: 'E1', date: 'x9' }]);
+    expect(report.rows).toHaveLength(0);
+    expect(report.skipped[0]).toContain('日期轴');
+  });
+
+  it('事件日与非事件日状态完全相同（剪枝后不足 2×2）：该别名退化记 skipped 不阻塞其余别名', () => {
+    const degenerate: PreparedDataset = {
+      ...dataset,
+      categories: {
+        ...dataset.categories,
+        A: [0, 1, 2, 0, 0, 0, 0, 0, 0], // 检验期全为状态 0 → 列联表仅一列
+      },
+    };
+    const report = eventAssociationScan(degenerate, [{ name: 'E1', date: 't3' }]);
+    expect(report.rows.map((r) => r.alias)).toEqual(['B']);
+    expect(report.skipped).toHaveLength(1);
+    expect(report.skipped[0]).toContain('A');
   });
 });

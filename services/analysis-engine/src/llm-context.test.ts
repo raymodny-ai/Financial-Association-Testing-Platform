@@ -31,6 +31,7 @@ const config: TaskConfig = {
   tests: { alpha: 0.05, correction: 'bh', permutations: 1000, permutationSeed: 20260819 },
   rolling: { enabled: true, windowDays: 252, stepDays: 21 },
   maxLag: 10,
+  events: [],
   audit: {
     missingRatioWarn: 0.02,
     missingRatioFail: 0.1,

@@ -19,6 +19,7 @@
 | 期望频数适用性 | 卡方近似条件报告：minExpected、fractionExpectedBelow5、adequate(=minExpected≥5)；不满足时必须警告而非静默执行（PRD）。 |
 | 零边际剪枝 | 检验期未出现的箱形成全零行/列，构造列联表后自动剪除并在 notes 记录；剪枝后不足 2×2 视为退化抛错。 |
 | 卡方拟合优度（GOF，S1） | PRD 模块 E：逐别名检验期状态频数 vs 参考期期望概率（参考期频数/参考期样本量）；参考期零概率箱退化由 goodnessOfFitScan 记入 skipped 不阻塞其余别名；结果行 family=categorical、test_name=chi_square_goodness_of_fit、左右同为该别名、效应量 null，校正单独成批；前端分区/导出/LLM 摘要按族自动承接。 |
+| 事件标签关联（S4） | PRD 首期范围「事件标签」的 MVP 落地：契约 events 数组（name/date/category 可选，同名同日期重复拒绝，default []）；引擎 eventAssociationScan 逐事件×逐别名构造「事件日 vs 非事件日」2×K 列联表（检验期、固定箱空间、零边际剪枝）走卡方独立性；事件日不在日期轴/检验期或剪枝后不足 2×2 记 skipped 不阻塞；结果行 family=categorical、test_name=event_association、left=event:<名称>、right=别名，校正单独成批；前端向导检验选项步事件编辑器（名称/日期/分类）+ 预览回显，结果分区/导出/LLM 按族自动承接。 |
 | studentTSf | t 分布生存函数，相关系数 p 值通道；df≤2 用解析闭式解（jstat 精度不足），df≥3 走 jstat。 |
 | 平均秩（ranksWithTies） | Spearman 秩变换：并列值取秩均值，Spearman = 秩上的 Pearson。 |
 | 互信息（MI） | 定义式 Σ p(x,y)ln(p(x,y)/(p(x)p(y)))，自然对数；连续变量经等频分箱后估计；置换检验 p=(≥观测次数+1)/(B+1)，播种 mulberry32 可复现。 |

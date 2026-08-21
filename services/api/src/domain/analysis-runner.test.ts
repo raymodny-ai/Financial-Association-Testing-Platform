@@ -60,6 +60,7 @@ const baseConfig: TaskConfig = {
   tests: { alpha: 0.05, correction: 'bh', permutations: 199, permutationSeed: 1 },
   rolling: { enabled: true, windowDays: 60, stepDays: 21 },
   maxLag: 0,
+  events: [],
   audit: {
     missingRatioWarn: 0.02,
     missingRatioFail: 0.1,
@@ -210,6 +211,29 @@ describe('runAnalysis · 全链路（注入 fake 依赖）', () => {
 
     // LLM 上下文承接：lag 关键发现不再是占位文案
     expect(interpretCalls[0]!.context.lag_key_findings).not.toContain('未产出滞后分析结果');
+  });
+
+  it('事件标签（S4）：检验期事件产出 event_association 行（left=event:<名称>），参考期事件不产出行', async () => {
+    const config: TaskConfig = {
+      ...baseConfig,
+      events: [
+        { name: '降息官宣', date: '2024-07-15' }, // 周一，检验期内
+        { name: '参考期旧闻', date: '2024-03-01' }, // 参考期 → 引擎记 skipped 不产出行
+      ],
+      rolling: { enabled: false, windowDays: 60, stepDays: 21 },
+    };
+    const { deps } = fakeDeps();
+    const outcome = await runAnalysis(config, deps);
+    const eventRows = outcome.results.filter((r) => r.test_name === 'event_association');
+    // 仅检验期事件 × 2 别量产出行；参考期事件被跳过
+    expect(eventRows).toHaveLength(2);
+    for (const row of eventRows) {
+      expect(row.test_family).toBe('categorical');
+      expect(row.left_series).toBe('event:降息官宣');
+      expect(row.window_end).toBeNull();
+      expect(row.lag).toBe(0);
+    }
+    expect(eventRows.map((r) => r.right_series).sort()).toEqual(['A', 'B']);
   });
 
   it('双源一致性审计（PRD 模块 J）：dualSource 第二源口径差异 → 一致率低于阈值 warn，第二源不入分析面板', async () => {

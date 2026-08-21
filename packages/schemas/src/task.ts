@@ -75,6 +75,15 @@ export const periodSplitSchema = z.object({
 });
 export type PeriodSplit = z.infer<typeof periodSplitSchema>;
 
+/** 事件标签（S4，PRD 首期范围「预先离散化后的事件序列」的 MVP 落地：单点事件日） */
+export const eventLabelSchema = z.object({
+  name: z.string().min(1).max(64),
+  date: dateSchema,
+  /** 事件分类（如 财报/政策，仅供展示与分组） */
+  category: z.string().min(1).max(32).optional(),
+});
+export type EventLabel = z.infer<typeof eventLabelSchema>;
+
 /** 分箱配置（fixed_threshold 须携带用户阈值，其余方法禁用；S2 缺口 N7 转正） */
 export const binningConfigSchema = z
   .object({
@@ -184,6 +193,8 @@ export const taskConfigSchema = z
     rolling: rollingConfigSchema.default({}),
     /** 最大滞后 */
     maxLag: z.number().int().min(0).max(60).default(DEFAULTS.maxLag),
+    /** 事件标签（S4）：事件日与非事件日状态分布关联检验，仅在检验期生效 */
+    events: z.array(eventLabelSchema).default([]),
     /** 审计阈值 */
     audit: auditThresholdsSchema.default({}),
     /** LLM 模型名 */
@@ -202,7 +213,22 @@ export const taskConfigSchema = z
   .refine((cfg) => cfg.periods.testEnd <= cfg.endDate, {
     message: '检验期结束日期不得晚于样本结束日期',
     path: ['periods', 'testEnd'],
-  });
+  })
+  .refine(
+    (cfg) => {
+      const seen = new Set<string>();
+      for (const e of cfg.events) {
+        const key = `${e.name}|${e.date}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+      }
+      return true;
+    },
+    {
+      message: '事件标签不得同名同日期重复',
+      path: ['events'],
+    },
+  );
 export type TaskConfig = z.infer<typeof taskConfigSchema>;
 
 /** 创建任务请求（api_gateway POST /api/tasks 入参） */

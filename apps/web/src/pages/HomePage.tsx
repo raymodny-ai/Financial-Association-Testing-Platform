@@ -113,6 +113,7 @@ const DEFAULT_ROLLING_METHODS: RollingMethod[] = ROLLING_METHOD_OPTIONS
 const METHOD_GUIDE: Array<{ name: string; when: string }> = [
   { name: '卡方独立性', when: '判断两变量涨跌状态是否关联（分箱后列联表）；期望频数不足时自动警告。' },
   { name: '卡方拟合优度（GOF）', when: '单变量检验期状态分布是否偏离参考期期望概率（分布漂移）；参考期从未出现的状态自动跳过该变量。' },
+  { name: '事件关联（event_association）', when: '配置事件标签后检验事件日与非事件日的状态分布差异；仅检验期事件生效，单日事件期望频数偏低时会警告。' },
   { name: 'Pearson 相关', when: '线性相关强度；对离群点敏感，适合近正态的连续序列。' },
   { name: 'Spearman 相关', when: '单调相关（基于秩）；对离群点与非正态稳健，适合肥尾金融序列。' },
   { name: '互信息（MI）', when: '捕捉任意形式依赖（含非线性）；置换检验定 p 值，计算量中等。' },
@@ -156,6 +157,8 @@ export default function HomePage() {
   const [bins, setBins] = useState<number>(DEFAULTS.binningBins);
   /** 固定阈值分箱的用户阈值（逗号分隔文本，S2） */
   const [thresholdsText, setThresholdsText] = useState('');
+  /** 事件标签（S4：事件日 vs 非事件日状态分布关联，仅检验期生效） */
+  const [events, setEvents] = useState<Array<{ name: string; date: Dayjs | null; category: string }>>([]);
   const [rollingEnabled, setRollingEnabled] = useState(true);
   const [windowDays, setWindowDays] = useState<number>(DEFAULTS.rollingWindowDays);
   const [stepDays, setStepDays] = useState<number>(DEFAULTS.rollingStepDays);
@@ -289,7 +292,19 @@ export default function HomePage() {
     return { values, error: null };
   }, [binningMethod, thresholdsText, bins]);
 
-  const stepValid = [step0Valid, step1Valid, step2Valid, thresholdsParsed?.error == null, true][step];
+  /** 事件标签校验（S4）：每行名称+日期必填，同名同日期不得重复（契约兑底） */
+  const eventsValid =
+    events.every((e) => e.date !== null && e.name.trim() !== '') &&
+    new Set(events.map((e) => `${e.name.trim()}|${e.date?.format(DATE_FORMAT) ?? ''}`)).size ===
+      events.length;
+
+  const stepValid = [
+    step0Valid,
+    step1Valid,
+    step2Valid,
+    thresholdsParsed?.error == null && eventsValid,
+    true,
+  ][step];
 
   /* ---------------- 组装配置（契约字段全集） ---------------- */
 
@@ -352,6 +367,12 @@ export default function HomePage() {
           ? { thresholds: thresholdsParsed.values }
           : {}),
       },
+      // S4：事件标签（契约 default []，显式透传以支持模板/复制分析回显）
+      events: events.map((e) => ({
+        name: e.name.trim(),
+        date: fmt(e.date),
+        ...(e.category.trim() !== '' ? { category: e.category.trim() } : {}),
+      })),
       tests: { alpha, correction, permutations, permutationSeed: 20260819 },
       rolling: {
         enabled: rollingEnabled,
@@ -370,7 +391,7 @@ export default function HomePage() {
     // 预览步刷新时机：进入第 4 步或点击运行时重算即可，此处保持轻量依赖
     step, sources, derived, researchQuestion, projectName, startDate, endDate, frequency,
     referenceStart, referenceEnd, testStart, testEnd,
-    binningMethod, bins, thresholdsText, rollingEnabled, windowDays, stepDays, minSamples, rollingMethods,
+    binningMethod, bins, thresholdsText, events, rollingEnabled, windowDays, stepDays, minSamples, rollingMethods,
     alpha, correction, permutations, maxLag,
   ]);
 
@@ -415,6 +436,9 @@ export default function HomePage() {
     setBinningMethod(config.binning.method);
     setBins(config.binning.bins);
     setThresholdsText(config.binning.thresholds?.join(', ') ?? '');
+    setEvents(
+      config.events.map((e) => ({ name: e.name, date: dayjs(e.date), category: e.category ?? '' })),
+    );
     setRollingEnabled(config.rolling.enabled);
     setWindowDays(config.rolling.windowDays);
     setStepDays(config.rolling.stepDays);
@@ -1073,6 +1097,61 @@ export default function HomePage() {
                 <span className="field-label">最大滞后期</span>
                 <InputNumber value={maxLag} min={0} max={60} style={{ width: '100%' }} onChange={(v) => setMaxLag(v ?? DEFAULTS.maxLag)} />
               </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                {/* S4：事件标签编辑（PRD 首期范围「事件标签」；仅检验期事件产出关联行） */}
+                <span className="field-label">
+                  事件标签（可选：检验事件日与非事件日的状态分布差异，仅在检验期生效）
+                </span>
+                {events.map((ev, index) => (
+                  <div key={`event-${index}`} className="source-fields" style={{ marginBottom: 'var(--space-2)' }}>
+                    <div>
+                      <span className="field-label">事件名称</span>
+                      <Input
+                        value={ev.name}
+                        maxLength={64}
+                        placeholder="如 降息官宣"
+                        onChange={(e) =>
+                          setEvents((prev) => prev.map((x, i) => (i === index ? { ...x, name: e.target.value } : x)))
+                        }
+                      />
+                    </div>
+                    <div>
+                      <span className="field-label">事件日期</span>
+                      <DatePicker
+                        value={ev.date}
+                        style={{ width: '100%' }}
+                        onChange={(d) =>
+                          setEvents((prev) => prev.map((x, i) => (i === index ? { ...x, date: d } : x)))
+                        }
+                      />
+                    </div>
+                    <div>
+                      <span className="field-label">分类（可选）</span>
+                      <Input
+                        value={ev.category}
+                        maxLength={32}
+                        placeholder="如 财报 / 政策"
+                        onChange={(e) =>
+                          setEvents((prev) => prev.map((x, i) => (i === index ? { ...x, category: e.target.value } : x)))
+                        }
+                      />
+                    </div>
+                    <div>
+                      <span className="field-label">&#8203;</span>
+                      <Button danger block onClick={() => setEvents((prev) => prev.filter((_, i) => i !== index))}>
+                        移除
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+                <Button
+                  type="dashed"
+                  icon={<PlusOutlined />}
+                  onClick={() => setEvents((prev) => [...prev, { name: '', date: null, category: '' }])}
+                >
+                  添加事件
+                </Button>
+              </div>
               <div className="method-guide">
                 <span className="field-label">方法说明与何时使用</span>
                 <ul>
@@ -1115,6 +1194,7 @@ export default function HomePage() {
                     { key: 'derived', label: '派生序列', children: derived.length === 0 ? '无' : derived.map((d) => `${d.alias} ← ${d.sourceAlias}${d.transform === 'ratio' ? `/${d.denominatorAlias ?? '?'}` : ''}（${TRANSFORM_OPTIONS.find((t) => t.value === d.transform)?.label ?? d.transform}）`).join('、') },
                     { key: 'range', label: '样本区间', children: `${startDate?.format(DATE_FORMAT) ?? ''} ~ ${endDate?.format(DATE_FORMAT) ?? ''}` },
                     { key: 'periods', label: '参考期 / 检验期', children: `${referenceStart?.format(DATE_FORMAT) ?? ''} ~ ${referenceEnd?.format(DATE_FORMAT) ?? ''} / ${testStart?.format(DATE_FORMAT) ?? ''} ~ ${testEnd?.format(DATE_FORMAT) ?? ''}` },
+                    { key: 'events', label: '事件标签', children: events.length === 0 ? '无' : events.map((e) => `${e.name.trim()}（${e.date?.format(DATE_FORMAT) ?? '?'}${e.category.trim() !== '' ? `，${e.category.trim()}` : ''}）`).join('、') },
                     { key: 'binning', label: '分箱', children: `${binningMethod} × ${bins} 桶${binningMethod === 'fixed_threshold' && thresholdsParsed !== null && thresholdsParsed.error === null ? `（阈值：${thresholdsParsed.values.join('、')}）` : ''}` },
                     { key: 'tests', label: '检验选项', children: `α=${alpha}，校正=${correction}，置换=${permutations}，最大滞后=${maxLag}` },
                     { key: 'rolling', label: '滚动窗口', children: rollingEnabled ? `${windowDays} 日 / 步长 ${stepDays}${minSamples !== null ? ` / 最小样本 ${minSamples}` : ''} / ${rollingMethods.length} 法` : '关闭' },

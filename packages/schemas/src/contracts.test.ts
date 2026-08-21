@@ -5,6 +5,7 @@ import {
   binningConfigSchema,
   createTemplateRequestSchema,
   derivedSeriesSchema,
+  eventLabelSchema,
   llmContextSchema,
   llmOutputSchema,
   resultRowSchema,
@@ -181,8 +182,27 @@ describe('taskConfigSchema 业务规则', () => {
     };
     expect(() => taskConfigSchema.parse(bad)).toThrow(/字段映射不得为空/);
   });
-});
 
+  it('事件标签（S4）：缺省为空数组，合法事件透传，同名同日期重复拒绝', () => {
+    expect(taskConfigSchema.parse(base).events).toEqual([]);
+    const withEvents = taskConfigSchema.parse({
+      ...base,
+      events: [{ name: '降息官宣', date: '2024-07-15', category: '政策' }],
+    });
+    expect(withEvents.events).toHaveLength(1);
+    expect(withEvents.events[0]!.category).toBe('政策');
+    expect(() => eventLabelSchema.parse({ name: '', date: '2024-07-15' })).toThrow();
+    expect(() =>
+      taskConfigSchema.parse({
+        ...base,
+        events: [
+          { name: '降息官宣', date: '2024-07-15' },
+          { name: '降息官宣', date: '2024-07-15' },
+        ],
+      }),
+    ).toThrow(/重复/);
+  });
+});
 describe('derivedSeriesSchema 比值变换守卫（S3）', () => {
   it('ratio 变换携带 denominatorAlias 通过', () => {
     const parsed = derivedSeriesSchema.parse({
