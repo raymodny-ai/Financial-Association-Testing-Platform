@@ -19,7 +19,7 @@ services: {
     pipeline: "prepareDataset 编排"
     chi2: "chi2sf（jstat 卡方 CDF 包装）"
     chi-square: "独立性/拟合优度/同质性三检验 + 适用性报告"
-    chi-square-dataset: "pairwiseChiSquare：PreparedDataset → 列联表编排"
+    chi-square-dataset: "pairwiseChiSquare：PreparedDataset → 列联表编排；goodnessOfFitScan：逐别名拟合优度（S1，参考期零概率箱记 skipped）"
     student-t: "studentTSf（df≤2 闭式解 / df≥3 jstat）"
     correlation: "pearsonTest / spearmanTest（平均秩）"
     mutual-information: "MI 定义式 + 等频分箱估计 + 播种置换检验"

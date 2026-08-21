@@ -12,6 +12,7 @@ import {
   buildLlmContext,
   correctAndMark,
   getContinuousMethod,
+  goodnessOfFitScan,
   lagScan,
   listContinuousMethodNames,
   pairwiseChiSquare,
@@ -216,6 +217,29 @@ export async function runAnalysis(config: TaskConfig, deps: RunnerDeps): Promise
     };
   });
 
+  // 3b. 分布漂移路线：每变量检验期状态分布 vs 参考期期望概率（PRD 模块 E，S1）
+  // 参考期零概率箱退化由引擎记入 skipped（与连续路线退化跳过同例，不阻塞其余别名）
+  const gofReport = goodnessOfFitScan(dataset);
+  const gofDrafts: DraftRow[] = gofReport.rows.map((r) => {
+    const warnings: string[] = [];
+    if (r.notes) warnings.push(r.notes);
+    if (!r.result.applicability.adequate) {
+      warnings.push(`期望频数不足（min=${r.result.applicability.minExpected.toFixed(2)}<5）`);
+    }
+    return {
+      family: 'categorical',
+      testName: 'chi_square_goodness_of_fit',
+      left: r.alias,
+      right: r.alias,
+      windowEnd: null,
+      lag: 0,
+      stat: r.result.statistic,
+      pRaw: r.result.pValue,
+      effect: r.result.cramersV,
+      notes: warnings.length > 0 ? warnings.join('；') : null,
+    };
+  });
+
   // 4. 连续变量路线：检验期数值对 × 注册表全部方法（退化抛错即跳过）
   const [testStart, testEnd] = dataset.testIndex;
   const continuousDrafts: DraftRow[] = [];
@@ -301,9 +325,10 @@ export async function runAnalysis(config: TaskConfig, deps: RunnerDeps): Promise
     }));
   }
 
-  // 7. 多重检验校正：全样本按族分批、滞后/滚动各自单独成批（与 alpha 比较标记显著）
+  // 7. 多重检验校正：全样本按族分批、GOF/滞后/滚动各自单独成批（与 alpha 比较标记显著）
   const results = [
     ...finalize(categoricalDrafts, runId, config.tests.correction, config.tests.alpha),
+    ...finalize(gofDrafts, runId, config.tests.correction, config.tests.alpha),
     ...finalize(continuousDrafts, runId, config.tests.correction, config.tests.alpha),
     ...finalize(lagDrafts, runId, config.tests.correction, config.tests.alpha),
     ...finalize(rollingDrafts, runId, config.tests.correction, config.tests.alpha),

@@ -18,6 +18,7 @@
 | chi2sf | 卡方分布生存函数 P(χ²>x)，p 值计算通道；jstat 仅提供 CDF（ADR 001），已对偶数 df 闭式解验证达 1e-9。 |
 | 期望频数适用性 | 卡方近似条件报告：minExpected、fractionExpectedBelow5、adequate(=minExpected≥5)；不满足时必须警告而非静默执行（PRD）。 |
 | 零边际剪枝 | 检验期未出现的箱形成全零行/列，构造列联表后自动剪除并在 notes 记录；剪枝后不足 2×2 视为退化抛错。 |
+| 卡方拟合优度（GOF，S1） | PRD 模块 E：逐别名检验期状态频数 vs 参考期期望概率（参考期频数/参考期样本量）；参考期零概率箱退化由 goodnessOfFitScan 记入 skipped 不阻塞其余别名；结果行 family=categorical、test_name=chi_square_goodness_of_fit、左右同为该别名、效应量 null，校正单独成批；前端分区/导出/LLM 摘要按族自动承接。 |
 | studentTSf | t 分布生存函数，相关系数 p 值通道；df≤2 用解析闭式解（jstat 精度不足），df≥3 走 jstat。 |
 | 平均秩（ranksWithTies） | Spearman 秩变换：并列值取秩均值，Spearman = 秩上的 Pearson。 |
 | 互信息（MI） | 定义式 Σ p(x,y)ln(p(x,y)/(p(x)p(y)))，自然对数；连续变量经等频分箱后估计；置换检验 p=(≥观测次数+1)/(B+1)，播种 mulberry32 可复现。 |
@@ -43,7 +44,7 @@
 | LLM 推理编排（runLlmInterpretation） | 渲染→调用（90s 超时/重试一次）→剔围栏→JSON.parse→llmOutputSchema 校验；永不抛错，产出 {output|null, trace}：success/failed/timeout/skipped（无密钥降级），失败不阻塞统计持久化（meta.json）。 |
 | OpenAI 兼容客户端（openAiCompatibleClient） | qwen（DashScope compatible-mode）与 deepseek 同一 chat/completions 协议；response_format=json_object；AbortError→LlmTimeoutError，非 2xx→AppError(502)。 |
 | 黄金基准集 | tests/fixtures/stat-reference.json，scipy/numpy 参考值对拍，容差 1e-9（ADR 001 决策二）。 |
-| 任务运行编排（runAnalysis） | T17-A domain 层纯 DI：数据加载（ticker 适配器/CSV 映射 date_col/close_col/adj_close_col）→ prepareDataset → 卡方族+连续注册表三法 → 滞后扫描（maxLag>0 时）→ 校正（全样本按族分批、滞后/滚动各自单独成批）→ 滚动窗口 → 每源审计 → buildLlmContext → interpret；重跑语义为 result/audit 整体替换、llm_artifacts ON CONFLICT 更新。 |
+| 任务运行编排（runAnalysis） | T17-A domain 层纯 DI：数据加载（ticker 适配器/CSV 映射 date_col/close_col/adj_close_col）→ prepareDataset → 卡方独立性+拟合优度（GOF，S1）+连续注册表四法 → 滞后扫描（maxLag>0 时）→ 校正（全样本按族分批、GOF/滞后/滚动各自单独成批）→ 滚动窗口 → 每源审计 → buildLlmContext → interpret；重跑语义为 result/audit 整体替换、llm_artifacts ON CONFLICT 更新。 |
 | 运行/结果端点 | POST /api/tasks/:id/run（running 时 409，失败回写 status=failed，成功后 panelRepository.save 落盘快照）与 GET /api/tasks/:id/results（task+results+audit+panel+llm 四产物一次返回，出参过 Zod 校验）。 |
 | 新建分析向导（HomePage） | T17-B 五步 Steps：数据源（ticker/CSV 动态列表+列映射）→ 样本区间 → 期间划分 → 检验选项 → 预览与运行；提交前 taskConfigSchema.safeParse 全量校验（workspaceId 占位，服务端 Cookie 覆盖），创建→同步运行→跳结果页。 |
 | 安全基线（T18） | helmet 安全头 + 固定窗口限流（rateLimiter 按 IP，默认 300/60s，内存计数）+ Origin 白名单 CORS（凭据 Cookie 支持，缺省同源）+ x-request-id 生成/透传 + 请求体错误映射（非法 JSON→400、超限→413）+ 非法 UUID 路径参数一律 404（assertUuidParam）+ 生产 Cookie Secure。 |

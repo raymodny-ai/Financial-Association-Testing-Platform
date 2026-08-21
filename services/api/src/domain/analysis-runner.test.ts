@@ -105,7 +105,7 @@ function fakeDeps(overrides?: Partial<RunnerDeps>): {
 }
 
 describe('runAnalysis · 全链路（注入 fake 依赖）', () => {
-  it('产出分类 1 组 + 连续 4 法（含 hsic，H2）+ 滚动行，run_id 一致', async () => {
+  it('产出分类 1 组独立性 + 2 组 GOF（S1，每别名一行）+ 连续 4 法（含 hsic，H2）+ 滚动行，run_id 一致', async () => {
     const { deps } = fakeDeps();
     const outcome = await runAnalysis(baseConfig, deps);
     expect(outcome.runId).toMatch(/^[0-9a-f-]{36}$/);
@@ -113,8 +113,18 @@ describe('runAnalysis · 全链路（注入 fake 依赖）', () => {
     const fullSample = outcome.results.filter((r) => r.window_end === null);
     const categorical = fullSample.filter((r) => r.test_family === 'categorical');
     const continuous = fullSample.filter((r) => r.test_family === 'continuous');
-    expect(categorical).toHaveLength(1); // 两别名 → 1 对
-    expect(categorical[0]!.test_name).toBe('chi_square_independence');
+    expect(categorical).toHaveLength(3); // 两别名 → 1 对独立性 + 2 行拟合优度
+    const independence = categorical.filter((r) => r.test_name === 'chi_square_independence');
+    expect(independence).toHaveLength(1);
+    // GOF（PRD 模块 E）：每别名一行，左右同为该别名，效应量为 null，notes 含参考期口径
+    const gof = categorical.filter((r) => r.test_name === 'chi_square_goodness_of_fit');
+    expect(gof.map((r) => r.left_series).sort()).toEqual(['A', 'B']);
+    for (const row of gof) {
+      expect(row.right_series).toBe(row.left_series);
+      expect(row.lag).toBe(0);
+      expect(row.effect_size).toBeNull();
+      expect(row.notes).toContain('参考期');
+    }
     expect(continuous.map((r) => r.test_name).sort()).toEqual([
       'hsic',
       'mutual_information',
@@ -225,7 +235,7 @@ describe('runAnalysis · 全链路（注入 fake 依赖）', () => {
     // 未配置双源的 B 保持单源语义（一致率 1）
     expect(outcome.audit.find((a) => a.series_alias === 'B')!.source_match_ratio).toBe(1);
     // 第二源仅供审计对账，不得产出分析行
-    expect(outcome.results.length).toBe(5); // 1 分类 + 4 连续（含 hsic，与无双源基线一致）
+    expect(outcome.results.length).toBe(7); // 1 分类独立性 + 2 GOF + 4 连续（含 hsic，与无双源基线一致）
     // 双源发现传导至 LLM 上下文
     expect(interpretCalls[0]!.context.audit_key_findings).toContain('双源一致率');
   });

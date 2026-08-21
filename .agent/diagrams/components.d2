@@ -18,7 +18,7 @@ analysis-engine: "services/analysis-engine/src" {
     homogeneity: "chiSquareHomogeneity(countsA, countsB) → 2×k 表"
     result: "ChiSquareResult{statistic, degreesOfFreedom, pValue, cramersV, expectedFrequencies, applicability}"
   }
-  chi-square-dataset: "pairwiseChiSquare(dataset)\n固定箱空间列联表 + 零边际剪枝(notes)"
+  chi-square-dataset: "pairwiseChiSquare(dataset)\n固定箱空间列联表 + 零边际剪枝(notes)\ngoodnessOfFitScan(dataset) → {rows, skipped}（S1）"
   student-t: "studentTSf(t, df)\ndf≤2 闭式解，df≥3 jstat"
   correlation: "pearsonTest(x,y) / spearmanTest(x,y)\n→ {r, statistic(t), degreesOfFreedom, pValue, n}"
   mutual-information: "mutualInformationFromCounts / estimateMutualInformation / permutationMiTest（mulberry32 播种）"
