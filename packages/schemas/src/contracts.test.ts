@@ -388,6 +388,31 @@ describe('批注与收藏契约（X4，PRD L140/L356）', () => {
   });
 });
 
+describe('promptVersion 枚举化（X6，LLM 模板 A/B）', () => {
+  const base = {
+    projectName: 'A/B 版本守卫',
+    workspaceId: '11111111-1111-4111-8111-111111111111',
+    dataSources: [
+      { kind: 'ticker', alias: 'spy', ticker: 'SPY.US', provider: 'stooq' },
+      { kind: 'ticker', alias: 'gold', ticker: 'XAUUSD', provider: 'stooq' },
+    ],
+    startDate: '2018-01-01',
+    endDate: '2024-12-31',
+    periods: {
+      referenceStart: '2018-01-01',
+      referenceEnd: '2020-12-31',
+      testStart: '2021-01-01',
+      testEnd: '2024-12-31',
+    },
+  };
+
+  it('缺省 v1；显式 v2 通过；未知版本拒绝', () => {
+    expect(taskConfigSchema.parse(base).promptVersion).toBe('v1');
+    expect(taskConfigSchema.parse({ ...base, promptVersion: 'v2' }).promptVersion).toBe('v2');
+    expect(taskConfigSchema.safeParse({ ...base, promptVersion: 'v3' }).success).toBe(false);
+  });
+});
+
 describe('上传文件契约', () => {
   it('uploadedFileSchema 含元数据字段且拒绝空列', () => {
     expect(Object.keys(uploadedFileSchema.shape)).toEqual([

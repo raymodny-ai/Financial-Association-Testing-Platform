@@ -141,6 +141,8 @@ export default function HomePage() {
   const [projectName, setProjectName] = useState('');
   /** 研究问题（G13，PRD 模块 K 输入要求）；可选，缺省由 LLM 按项目名派生 */
   const [researchQuestion, setResearchQuestion] = useState('');
+  /** prompt 模板版本（X6 模板 A/B：与 prompts/meta.json versions 对齐） */
+  const [promptVersion, setPromptVersion] = useState<'v1' | 'v2'>('v1');
   const [sources, setSources] = useState<DraftSource[]>([newDraftSource(), newDraftSource()]);
   /** 派生序列（G11：由基础序列经收益率/差分派生，参与后续全部检验） */
   const [derived, setDerived] = useState<DerivedSeries[]>([]);
@@ -386,7 +388,7 @@ export default function HomePage() {
       },
       maxLag,
       llmModel: 'qwen-plus',
-      promptVersion: 'v1',
+      promptVersion,
     };
   }
 
@@ -395,7 +397,7 @@ export default function HomePage() {
     step, sources, derived, researchQuestion, projectName, startDate, endDate, frequency,
     referenceStart, referenceEnd, testStart, testEnd,
     binningMethod, bins, thresholdsText, events, rollingEnabled, windowDays, stepDays, minSamples, rollingMethods,
-    alpha, correction, permutations, maxLag,
+    alpha, correction, permutations, maxLag, promptVersion,
   ]);
 
   const issueTexts = useMemo(
@@ -436,6 +438,7 @@ export default function HomePage() {
   function applyConfig(config: TaskConfig, filesById: Map<string, UploadedFile>): void {
     setProjectName(config.projectName);
     setResearchQuestion(config.researchQuestion ?? '');
+    setPromptVersion(config.promptVersion);
     setStartDate(dayjs(config.startDate));
     setEndDate(dayjs(config.endDate));
     setFrequency(config.frequency);
@@ -543,6 +546,9 @@ export default function HomePage() {
         const [task, files] = await Promise.all([getTask(cloneTaskId), listFiles()]);
         setCloneBaseline(task.config);
         applyConfig(task.config, new Map(files.map((f) => [f.id, f])));
+        // X6 A/B 对比重跑：?prompt=<版本> 覆盖克隆任务的模板版本（差异经 X2 失效提示自动暴露）
+        const promptParam = searchParams.get('prompt');
+        if (promptParam === 'v1' || promptParam === 'v2') setPromptVersion(promptParam);
         message.success(`已载入任务「${task.config.projectName}」的配置，可调整后运行`);
       } catch (error) {
         message.error(error instanceof Error ? error.message : '任务配置载入失败');
@@ -611,6 +617,19 @@ export default function HomePage() {
                     maxLength={512}
                     rows={2}
                     showCount
+                  />
+                </div>
+                <div>
+                  {/* X6：LLM 模板 A/B（PRD L648），两版本占位符集一致，仅写作风格不同 */}
+                  <span className="field-label">LLM 提示词版本（A/B 对比：同一研究可用不同版本重跑对照）</span>
+                  <Radio.Group
+                    value={promptVersion}
+                    onChange={(e) => setPromptVersion(e.target.value as 'v1' | 'v2')}
+                    optionType="button"
+                    options={[
+                      { label: 'v1 基线：结构化叙述', value: 'v1' },
+                      { label: 'v2 变体：结论先行、要点式', value: 'v2' },
+                    ]}
                   />
                 </div>
                 <div>

@@ -13,8 +13,10 @@ export async function interpretContext(
   context: LlmContext,
   model: string,
   runId?: string,
+  /** prompt 模板版本（X6，模板 A/B；缺省 v1 向后兼容） */
+  promptVersion = 'v1',
 ): Promise<LlmRunResult> {
-  const assets = loadPromptAssets();
+  const assets = loadPromptAssets(promptVersion);
   const provider = resolveLlmProvider(model);
   return runLlmInterpretation({
     context,

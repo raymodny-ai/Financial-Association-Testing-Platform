@@ -75,9 +75,9 @@ const baseConfig: TaskConfig = {
 
 function fakeDeps(overrides?: Partial<RunnerDeps>): {
   deps: RunnerDeps;
-  interpretCalls: Array<{ context: LlmContext; model: string; runId: string }>;
+  interpretCalls: Array<{ context: LlmContext; model: string; runId: string; promptVersion: string }>;
 } {
-  const interpretCalls: Array<{ context: LlmContext; model: string; runId: string }> = [];
+  const interpretCalls: Array<{ context: LlmContext; model: string; runId: string; promptVersion: string }> = [];
   const deps: RunnerDeps = {
     async fetchHistory(_provider, ticker) {
       return makePanel(ticker, ticker === 'AAA' ? 1 : 3);
@@ -85,15 +85,15 @@ function fakeDeps(overrides?: Partial<RunnerDeps>): {
     async readFileContent() {
       return '';
     },
-    async interpret(context, model, runId) {
-      interpretCalls.push({ context, model, runId });
+    async interpret(context, model, runId, promptVersion) {
+      interpretCalls.push({ context, model, runId, promptVersion });
       return {
         output: null,
         trace: {
           run_id: runId,
           provider: 'qwen',
           model,
-          prompt_version: 'v1',
+          prompt_version: promptVersion,
           requested_at: '2026-01-01T00:00:00.000Z',
           completed_at: '2026-01-01T00:00:01.000Z',
           latency_ms: 0,
@@ -384,5 +384,12 @@ describe('runAnalysis · 全链路（注入 fake 依赖）', () => {
     expect(steps).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
     // 步数与注册表标签表对齐（编排 10 步 + 路由持久化 1 步）
     expect(RUN_STEPS.length).toBe(steps.length + 1);
+  });
+
+  it('prompt 版本透传（X6，LLM 模板 A/B）：config.promptVersion 传导至 interpret 入参', async () => {
+    const config: TaskConfig = { ...baseConfig, promptVersion: 'v2' };
+    const { deps, interpretCalls } = fakeDeps();
+    await runAnalysis(config, deps);
+    expect(interpretCalls[0]!.promptVersion).toBe('v2');
   });
 });

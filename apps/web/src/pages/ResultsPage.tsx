@@ -490,6 +490,10 @@ export default function ResultsPage() {
           <Link to={`/?clone=${task.id}`}>
             <Button>调整参数并重跑</Button>
           </Link>
+          {/* X6：LLM 模板 A/B——克隆同配置并预选另一版本，产出对照解读（差异经 X2 失效提示暴露） */}
+          <Link to={`/?clone=${task.id}&prompt=${config.promptVersion === 'v2' ? 'v1' : 'v2'}`}>
+            <Button>A/B 对比：换用 {config.promptVersion === 'v2' ? 'v1' : 'v2'} 重跑</Button>
+          </Link>
         </Space>
       </div>
 
@@ -518,6 +522,11 @@ export default function ResultsPage() {
               <div>
                 <div className="config-summary-label">样本区间</div>
                 <div className="config-summary-value font-data">{config.startDate} ~ {config.endDate}</div>
+              </div>
+              {/* X6：A/B 对照可见性：当前任务使用的提示词版本 */}
+              <div>
+                <div className="config-summary-label">提示词版本</div>
+                <div className="config-summary-value font-data">{config.promptVersion}</div>
               </div>
               <div>
                 <div className="config-summary-label">参考期 / 检验期</div>

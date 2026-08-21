@@ -48,6 +48,8 @@ export interface RunnerDeps {
     context: LlmContext,
     model: string,
     runId: string,
+    /** prompt 模板版本（X6，模板 A/B；透传至提示词资产加载） */
+    promptVersion: string,
   ): Promise<{ output: LlmOutput | null; trace: LlmTrace }>;
   /**
    * 滚动窗口执行器（P1）：注入 worker 线程池实现后台并行化；
@@ -451,7 +453,7 @@ export async function runAnalysis(
     audit,
     auditNotes,
   });
-  const llm = await deps.interpret(context, config.llmModel, runId);
+  const llm = await deps.interpret(context, config.llmModel, runId, config.promptVersion);
 
   return { runId, results, audit, panel, llm: { context, output: llm.output, trace: llm.trace } };
 }

@@ -63,7 +63,7 @@ api-data-flow: "services/api 数据链路" {
   prompt-renderer: "renderPrompt(template, context)\n{{placeholder}} ← LlmContext 12 字段；未知占位符抛错"
   llm-service: "runLlmInterpretation(options) → {output|null, trace}\n90s 超时/重试一次/剔围栏/schema 校验；skipped 降级永不抛错"
   llm-http: "openAiCompatibleClient.complete(request)\nchat/completions + response_format=json_object；AbortError→LlmTimeoutError"
-  llm-runner: "interpretContext(context, model, runId?)\n装配 prompt-assets + llm-config + llm-http + llm-service"
+  llm-runner: "interpretContext(context, model, runId?, promptVersion?)\n装配 prompt-assets（多版本加载，X6）+ llm-config + llm-http + llm-service"
   security: "T18 安全基线：requestIdMiddleware（x-request-id 透传）\nrateLimiter({windowMs,max}) 固定窗口 429+Retry-After\ncorsMiddleware(白名单+凭据，OPTIONS→204)\nassertUuidParam 非法 UUID→404"
   logger: "createLogger(sink?) JSON 行日志 + requestLogger（不落 Cookie）"
 
@@ -95,8 +95,8 @@ web-flow: "apps/web 核心工作流（T17-B）" {
   workspace: "WorkspacePage：listTasks/listFiles/listTemplates 计数总览 + 功能入口（X5）"
   datasets: "DatasetsPage：listFiles + deleteFile（Popconfirm 确认，X5）"
   reports: "ReportsPage：已完成任务 → getTaskResults → export15FullReport 客户端生成（X5）"
-  home: "HomePage：五步向导 → taskConfigSchema.safeParse → createTask → runTask(202) → /results/:id（P2 启动即跳转）；X2 克隆基线与草稿逐域比对，预览步渲染失效分组警告"
-  results: "ResultsPage：无参时已完成任务索引直达（X5）；getTaskResults（运行中 2s 轮询）+ getTaskProgress（1s 轮询，进度条+当前步骤，X1）→ 风险固定条(.risk-banner-breach) + 检验 Tab + LLM 并排(.llm-split) + 客户端导出；失败页一键重试；X2 调整参数并重跑 → /?clone；X4 收藏星+复制分享链接+研究注释卡（增删）"
+  home: "HomePage：五步向导 → taskConfigSchema.safeParse → createTask → runTask(202) → /results/:id（P2 启动即跳转）；X2 克隆基线与草稿逐域比对，预览步渲染失效分组警告；X6 提示词版本选择（?prompt= 覆盖）"
+  results: "ResultsPage：无参时已完成任务索引直达（X5）；getTaskResults（运行中 2s 轮询）+ getTaskProgress（1s 轮询，进度条+当前步骤，X1）→ 风险固定条(.risk-banner-breach) + 检验 Tab + LLM 并排(.llm-split) + 客户端导出；失败页一键重试；X2 调整参数并重跑 → /?clone；X4 收藏星+复制分享链接+研究注释卡（增删）；X6 A/B 对比重跑（/?clone=&prompt= 换版本）+ 配置摘要提示词版本行"
   history: "HistoryPage：listTasks + 重跑 mutation；X4 收藏星标展示"
   api-client: "lib/api.ts：fetch credentials:'include'，出参一律 Zod 校验；X5 补 deleteFile"
 

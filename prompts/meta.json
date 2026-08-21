@@ -1,6 +1,7 @@
 {
   "version": "v1",
-  "description": "提示词资产清单与调用约束。llm_trace.json 必须记录本版本号（可复现性要求）。",
+  "description": "提示词资产清单与调用约束。llm_trace.json 必须记录本版本号（可复现性要求）。versions 声明全部可用版本（X6 模板 A/B）：v1 为根目录文件，v2+ 在 <version>/ 子目录。",
+  "versions": ["v1", "v2"],
   "files": {
     "system": "system_prompt.txt",
     "userTemplate": "user_prompt_template.txt",

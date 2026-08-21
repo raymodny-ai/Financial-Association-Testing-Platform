@@ -16,7 +16,7 @@
 | 滚动窗口 | 可配置窗口长度/步长/最小样本量/检验方法子集（G5 前端透传）的时序滚动重算（退化窗口记 skipped 不中断） |
 | 滞后分析 | [-maxLag,+maxLag] 全整数滞后 Pearson 扫描（PRD 模块 H），最优 lag 自动标注；结果页曲线图 + 表格双视图 |
 | 数据真实性审计 | 缺失率 / 跳点 / 陈旧数据六类审计，pass/warn/fail 三级判定；双源一致性审计（同标的第二数据源：状态一致率 + 同质性卡方）；fail 序列强制注入 LLM 安全旗标（置信降级） |
-| LLM 解释 | qwen（DashScope）/ deepseek 可选；提示词模板版本化（`prompts/`），输出经 Zod Schema 严格校验；无密钥自动降级 skipped，不阻塞统计结果 |
+| LLM 解释 | qwen（DashScope）/ deepseek 可选；提示词模板多版本（`prompts/`：v1 基线 + v2 结论先行变体，模板 A/B 对比重跑），输出经 Zod Schema 严格校验；无密钥自动降级 skipped，不阻塞统计结果 |
 | 前端 | 五步新建分析向导、三栏结果页（配置摘要 + 检验 Tab 区 + 导出）、历史任务列表；PRD 01~15 编号导出体系；分析模板复用（保存模板 / 复制分析 / 重跑同配置） |
 
 ---
@@ -44,8 +44,8 @@
 │   └── ui                      # 设计 Token 唯一来源（tokens.ts / tokens.css）
 ├── services/
 │   ├── analysis-engine         # 纯函数统计/审计引擎（无 IO、无框架依赖，202 测试）
-│   └── api                     # Express 5 网关：任务编排 / 数据适配 / LLM 推理（105 测试）
-├── prompts/                    # LLM 提示词模板 + output_schema.json（版本号入 trace）
+│   └── api                     # Express 5 网关：任务编排 / 数据适配 / LLM 推理（119 测试）
+├── prompts/                    # LLM 提示词模板（v1 根目录 + v2 子目录）+ output_schema.json
 ├── infra/db                    # PostgreSQL 迁移 SQL + 本地免管理员启停脚本
 ├── tests/fixtures              # 黄金基准集 stat-reference.json（scipy/numpy 参考值）
 ├── docs                        # DEPLOY.md 部署手册 + adr/
@@ -114,14 +114,14 @@ pnpm --filter @platform/web dev
 ## ✅ 常用命令
 
 ```bash
-pnpm test                # 全仓测试（5 包共 378 例）
+pnpm test                # 全仓测试（5 包共 384 例）
 pnpm typecheck           # 全仓 TypeScript 严格检查
 pnpm lint                # ESLint
 pnpm build               # 全仓构建（web: vite / api: tsup）
 pnpm --filter @platform/api db:migrate   # 应用数据库迁移（幂等）
 ```
 
-测试矩阵：analysis-engine **202** · api **114**（含 PostgreSQL 集成测试与审计注入测试）· schemas **51** · ui **7** · shared **4**。
+测试矩阵：analysis-engine **202** · api **119**（含 PostgreSQL 集成测试与审计注入测试）· schemas **52** · ui **7** · shared **4**。
 
 ---
 

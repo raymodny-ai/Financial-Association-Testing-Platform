@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { llmOutputSchema } from '@platform/schemas';
 import { resolveLlmProvider } from './llm-config.js';
-import { loadOutputSchema, loadPromptAssets } from './prompt-assets.js';
+import { listPromptVersions, loadOutputSchema, loadPromptAssets } from './prompt-assets.js';
 
 describe('resolveLlmProvider', () => {
   it('qwen 系模型 → DashScope compatible-mode + DASHSCOPE_API_KEY', () => {
@@ -35,6 +35,33 @@ describe('loadPromptAssets', () => {
     expect(assets.systemPrompt).toContain('金融统计解释助手');
     expect(assets.userTemplate).toContain('{{research_question}}');
     expect(assets.userTemplate).toContain('{{forbidden_claims}}');
+  });
+});
+
+describe('提示词多版本（X6，LLM 模板 A/B）', () => {
+  it('listPromptVersions 返回 meta.json 声明的 v1/v2', () => {
+    expect(listPromptVersions()).toEqual(['v1', 'v2']);
+  });
+
+  it('显式 v1 与缺省加载一致（向后兼容）', () => {
+    const explicit = loadPromptAssets('v1');
+    const defaulted = loadPromptAssets();
+    expect(explicit).toEqual(defaulted);
+  });
+
+  it('v2 变体：版本号回显 v2，模板与 v1 不同且占位符集不变', () => {
+    const v2 = loadPromptAssets('v2');
+    const v1 = loadPromptAssets('v1');
+    expect(v2.version).toBe('v2');
+    expect(v2.systemPrompt).not.toBe(v1.systemPrompt);
+    expect(v2.userTemplate).not.toBe(v1.userTemplate);
+    // 占位符集合与 v1 一致（renderPrompt 要求 12 占位符全集替换）
+    const placeholders = (t: string) => [...t.matchAll(/\{\{(\w+)\}\}/g)].map((m) => m[1]).sort();
+    expect(placeholders(v2.userTemplate)).toEqual(placeholders(v1.userTemplate));
+  });
+
+  it('未知版本抛错（快速失败，供任务运行错误回显）', () => {
+    expect(() => loadPromptAssets('v9')).toThrow(/v9/);
   });
 });
 

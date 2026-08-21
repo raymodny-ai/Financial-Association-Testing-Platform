@@ -25,16 +25,40 @@ function findPromptsDir(): URL {
   throw new Error('未找到 prompts/meta.json（自模块目录向上检索 8 级）');
 }
 
-/** 默认从仓库根 prompts/ 加载（向上寻路） */
-export function loadPromptAssets(promptsDir: URL = findPromptsDir()): PromptAssets {
+/** 版本清单（meta.json versions）：任务配置的 promptVersion 合法域 */
+export function listPromptVersions(promptsDir: URL = findPromptsDir()): string[] {
   const meta = JSON.parse(readFileSync(new URL('meta.json', promptsDir), 'utf-8')) as {
-    version: string;
-    files: { system: string; userTemplate: string };
+    versions?: string[];
   };
+  return meta.versions ?? [];
+}
+
+/**
+ * 按版本加载提示词资产（X6，LLM 模板 A/B）。
+ * v1 = 根目录文件（meta.json files 声明）；v2+ = prompts/<version>/ 子目录固定文件名；
+ * 未知版本抛错（快速失败，错误经任务运行回显）。
+ */
+export function loadPromptAssets(version = 'v1', promptsDir: URL = findPromptsDir()): PromptAssets {
+  const versions = listPromptVersions(promptsDir);
+  if (!versions.includes(version)) {
+    throw new Error(`未知 prompt 版本 ${version}（可用：${versions.join(', ')}）`);
+  }
+  if (version === 'v1') {
+    const meta = JSON.parse(readFileSync(new URL('meta.json', promptsDir), 'utf-8')) as {
+      version: string;
+      files: { system: string; userTemplate: string };
+    };
+    return {
+      version: meta.version,
+      systemPrompt: readFileSync(new URL(meta.files.system, promptsDir), 'utf-8'),
+      userTemplate: readFileSync(new URL(meta.files.userTemplate, promptsDir), 'utf-8'),
+    };
+  }
+  const versionDir = new URL(`${version}/`, promptsDir);
   return {
-    version: meta.version,
-    systemPrompt: readFileSync(new URL(meta.files.system, promptsDir), 'utf-8'),
-    userTemplate: readFileSync(new URL(meta.files.userTemplate, promptsDir), 'utf-8'),
+    version,
+    systemPrompt: readFileSync(new URL('system_prompt.txt', versionDir), 'utf-8'),
+    userTemplate: readFileSync(new URL('user_prompt_template.txt', versionDir), 'utf-8'),
   };
 }
 

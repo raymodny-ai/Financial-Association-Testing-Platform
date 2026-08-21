@@ -199,8 +199,8 @@ export const taskConfigSchema = z
     audit: auditThresholdsSchema.default({}),
     /** LLM 模型名 */
     llmModel: z.string().min(1).default('qwen-plus'),
-    /** prompt 模板版本（可复现性要求） */
-    promptVersion: z.string().min(1).default('v1'),
+    /** prompt 模板版本（可复现性要求；X6 模板 A/B：与 prompts/meta.json versions 对齐） */
+    promptVersion: z.enum(['v1', 'v2']).default('v1'),
   })
   .refine((cfg) => cfg.periods.referenceEnd < cfg.periods.testStart, {
     message: '参考期结束日期必须早于检验期开始日期',

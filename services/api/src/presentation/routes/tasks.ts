@@ -100,7 +100,8 @@ function makeRunnerDeps(workspaceId: string): RunnerDeps {
       if (!file) throw new NotFoundError('上传文件不存在或不属于当前工作区');
       return file.content;
     },
-    interpret: (context, model, runId) => interpretContext(context, model, runId),
+    interpret: (context, model, runId, promptVersion) =>
+      interpretContext(context, model, runId, promptVersion),
     rollingExecutor: createParallelRollingExecutor(),
   };
 }
