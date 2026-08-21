@@ -385,7 +385,13 @@ export default function ResultsPage() {
 
   return (
     <div>
-      <h1 className="page-title font-display">{config.projectName}</h1>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-4)' }}>
+        <h1 className="page-title font-display">{config.projectName}</h1>
+        {/* X2：参数调整入口 → 克隆向导（变更后预览步提示哪些结果失效） */}
+        <Link to={`/?clone=${task.id}`}>
+          <Button>调整参数并重跑</Button>
+        </Link>
+      </div>
 
       {/* PRD：审计高风险须固定醒目提示，不得折叠隐藏 */}
       {failedSeries.length > 0 && (

@@ -25,6 +25,7 @@ import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
 import {
   DEFAULTS,
+  diffTaskConfig,
   taskConfigSchema,
   type AnalysisTemplate,
   type BinningMethod,
@@ -180,6 +181,8 @@ export default function HomePage() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [saveModalOpen, setSaveModalOpen] = useState(false);
   const [templateName, setTemplateName] = useState('');
+  /** X2：复制分析来源任务的已运行配置基线（模板载入无既有结果，不置基线） */
+  const [cloneBaseline, setCloneBaseline] = useState<TaskConfig | null>(null);
 
   useEffect(() => {
     void listTemplates().then(setTemplates).catch(() => undefined);
@@ -403,6 +406,12 @@ export default function HomePage() {
     [parsed],
   );
 
+  /** X2 参数失效提示（PRD L363）：克隆基线与当前草稿逐域比对，预览步渲染失效分组 */
+  const invalidated = useMemo(
+    () => (cloneBaseline !== null && parsed.success ? diffTaskConfig(cloneBaseline, parsed.data) : []),
+    [cloneBaseline, parsed],
+  );
+
   /* ---------------- 提交：创建任务 → 同步运行 → 跳转结果页 ---------------- */
 
   async function handleSubmit(): Promise<void> {
@@ -494,6 +503,8 @@ export default function HomePage() {
     try {
       const files = await listFiles();
       applyConfig(template.config, new Map(files.map((f) => [f.id, f])));
+      // X2：模板不携带既有结果，清除克隆基线避免误导失效提示
+      setCloneBaseline(null);
       message.success(`已载入模板「${template.name}」，请核对后运行`);
     } catch (error) {
       message.error(error instanceof Error ? error.message : '模板载入失败');
@@ -530,6 +541,7 @@ export default function HomePage() {
     void (async () => {
       try {
         const [task, files] = await Promise.all([getTask(cloneTaskId), listFiles()]);
+        setCloneBaseline(task.config);
         applyConfig(task.config, new Map(files.map((f) => [f.id, f])));
         message.success(`已载入任务「${task.config.projectName}」的配置，可调整后运行`);
       } catch (error) {
@@ -1189,6 +1201,23 @@ export default function HomePage() {
                   />
                 )}
                 {submitError !== null && <Alert type="error" showIcon message="运行失败" description={submitError} />}
+                {/* X2：参数变更后提示哪些既有结果将失效并需重新运行（PRD L363） */}
+                {invalidated.length > 0 && (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    message="参数变更失效提示：原任务的以下结果将不再适用，需以新参数重新运行（运行将创建新任务，原任务结果保留可对照）"
+                    description={
+                      <ul style={{ margin: 0, paddingLeft: 'var(--space-5)' }}>
+                        {invalidated.map((impact) => (
+                          <li key={impact.scope}>
+                            <strong>{impact.changed.join('、')}</strong> 已变更 → {impact.scope}失效
+                          </li>
+                        ))}
+                      </ul>
+                    }
+                  />
+                )}
                 <Descriptions
                   bordered
                   size="small"

@@ -114,14 +114,14 @@ pnpm --filter @platform/web dev
 ## ✅ 常用命令
 
 ```bash
-pnpm test                # 全仓测试（5 包共 353 例）
+pnpm test                # 全仓测试（5 包共 366 例）
 pnpm typecheck           # 全仓 TypeScript 严格检查
 pnpm lint                # ESLint
 pnpm build               # 全仓构建（web: vite / api: tsup）
 pnpm --filter @platform/api db:migrate   # 应用数据库迁移（幂等）
 ```
 
-测试矩阵：analysis-engine **202** · api **105**（含 PostgreSQL 集成测试与审计注入测试）· schemas **35** · ui **7** · shared **4**。
+测试矩阵：analysis-engine **202** · api **105**（含 PostgreSQL 集成测试与审计注入测试）· schemas **48** · ui **7** · shared **4**。
 
 ---
 

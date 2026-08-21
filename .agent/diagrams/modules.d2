@@ -1,7 +1,7 @@
 # 模块图（从当前代码结构派生，T20 后刷新）
 
 packages: {
-  schemas: "packages/schemas\nZod 契约唯一来源"
+  schemas: "packages/schemas\nZod 契约唯一来源 + 配置差异失效域分类（X2）"
   shared: "packages/shared\nAppError 族"
   ui: "packages/ui\n设计 Token（tokens.ts/css）"
 }
@@ -36,8 +36,8 @@ services: {
 
 apps: {
   web: "apps/web\nReact + Vite + AntD\nG7 路由懒加载 + vendor 分割" {
-    home: "HomePage 新建分析向导（五步 Steps，safeParse 校验；G6 模板条载入/删除 + 保存为模板 + /?clone 预填；G11 派生序列编辑器；G12 CSV 第二文件双源审计；G13 研究问题）"
-    results: "ResultsPage 三栏结果页（.layout-results + 风险固定条 + 七 Tab：分类/连续/滚动/滞后/审计/LLM/原始导出 + 导出；P2/X1 运行中进度条轮询与失败重试）"
+    home: "HomePage 新建分析向导（五步 Steps，safeParse 校验；G6 模板条载入/删除 + 保存为模板 + /?clone 预填；G11 派生序列编辑器；G12 CSV 第二文件双源审计；G13 研究问题；X2 克隆基线失效提示）"
+    results: "ResultsPage 三栏结果页（.layout-results + 风险固定条 + 七 Tab：分类/连续/滚动/滞后/审计/LLM/原始导出 + 导出；P2/X1 运行中进度条轮询与失败重试；X2 调整参数并重跑入口）"
     lag-chart: "LagCurveChart 零依赖 SVG 滞后曲线图（与表格双视图，PRD 模块 H）"
     history: "HistoryPage 任务列表（状态标签 + 重跑 + 复制分析）"
     lib: "lib/api.ts fetch 封装（credentials:'include' + Zod 出参校验，含 panel 快照） + lib/export.ts 下载原语 + lib/export-report.ts 01~15 编号导出生成器"

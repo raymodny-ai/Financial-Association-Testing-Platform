@@ -38,7 +38,8 @@
 | 滞后扫描（lagScan） | PRD 模块 H（G1/G2）：lag=k（k>0）= x 领先 y k 期（x[0..n-1-k]↔y[k..n-1]），k<0 对称；扫描 [-maxLag,+maxLag] 全整数 lag 的 Pearson r/p/n，bestLag=最大 abs(r)（并列取 abs(lag) 更小）；退化切片（零方差）跳过不中断，全退化抛 RangeError；注意 -0 归一（Object.is 区分 ±0）。 |
 | 滞后行（pearson_lag） | 编排产出：family=continuous、test_name='pearson_lag'、检验期数值切片、单独成批校正；最优 lag 行 notes 标注 abs(r)；DB lag 约束 ±60（迁移 004）；前端按 test_name 分区（兼容负 lag）。 |
 | 滞后双视图（LagCurveChart） | 结果页滞后 Tab（PRD 模块 H）：零依赖 SVG 折线图（x=lag/y=r∈[-1,1]，按变量对取 --chart-series-* 序列色，显著点实心加重）+ 表格双视图；未启用时（maxLag=0）引导文案。 |
-| 分析模板（AnalysisTemplate，G6） | PRD 配置设计三入口：「保存模板」（预览步弹窗，name+TaskConfig 落 config_templates 表 JSONB，迁移 006）/「复制分析」（历史页 → /?clone=<taskId> 预填向导）/「重跑同配置」（历史页重跑）；模板载入经 applyConfig 反向映射向导草稿（upload 源 columns 经 listFiles 补全，文件已删降级标注）；workspaceId 服务端注入（与 tasks 同口径）。 |
+| 分析模板（AnalysisTemplate，G6） | PRD 配置设计三入口：「保存模板」（预览步弹窗，name+TaskConfig 落 config_templates 表 JSONB，迁移 006）/「复制分析」（历史页 → /?clone=<taskId> 预填向导）/「重跑同配置」（历史页重跑）；模板载入经 applyConfig 反向映射向导草稿（upload 源 columns 经 listFiles 补全，文件已删降级标注）；模板载入会清除克隆基线（无既有结果）；workspaceId 服务端注入（与 tasks 同口径）。 |
+| 参数失效提示（diffTaskConfig，X2） | PRD L363：参数变更后提示哪些结果将失效。克隆基线（来源任务已运行配置）与向导草稿逐域比对，按影响面分八组固定顺序返回：数据面（源/派生/区间/频率/期间）→全部；分箱→状态分布相关；检验选项→显著性结论；滚动/滞后/事件/审计各自独立；研究问题与 LLM 配置→仅解读；项目名/工作区为元数据不失效。向导预览步渲染失效分组警告；结果页「调整参数并重跑」入口 → 克隆向导。 |
 | 导出面板快照（ExportPanel，G4） | PRD 导出规范 01~05 号文件的数据底座：runAnalysis 产出 {aliases/dates/prices/categories/thresholds/adjusted/periods}，run_panels 表 JSONB 持久化（重跑 ON CONFLICT 替换，迁移 005），GET results 随产物返回；G4 前历史任务为 null（前端禁用 01~05 并提示重跑）。 |
 | 导出规范 01~15（export-report.ts） | PRD 导出文件编号体系：01 原始价/02 复权价/03 收益率/04 状态面板/05 阈值 JSON（依赖 panel）· 06 卡方/07 连续/08 滚动/09 滞后按变量对拆分 · 10 质量审计/11 源一致性 · 12 LLM 上下文/13 结论 Markdown/14 追踪 · 15 完整报告 HTML（7 节：数据概况/方法/显著/不稳定/质量/LLM/禁止性，escapeHtml 防注入）；分区口径与 ResultsPage Tab 同源（partitionResults）。 |
 | 研究摘要对象（buildLlmContext） | PRD 模块 K：LLM 不读大表，只读 12 字段上下文。输入 TaskConfig+ResultTable+AuditTable；行分区规则 window_end 非空=滚动、lag≠0=滞后、其余=全样本；输出经 llmContextSchema 运行时校验。 |
@@ -62,12 +63,12 @@
 
 | 模块 | 职责 | 关键接缝 |
 | --- | --- | --- |
-| packages/schemas | Zod 契约唯一来源（入参/出参/持久化双向校验） | 被 api / analysis-engine / web 消费 |
+| packages/schemas | Zod 契约唯一来源（入参/出参/持久化双向校验）+ 配置差异与失效域分类纯函数（config-diff，X2） | 被 api / analysis-engine / web 消费 |
 | packages/shared | AppError 族（含 DataAdapterError 502） | 被 api / analysis-engine 消费 |
 | packages/ui | 设计 Token 唯一来源（tokens.ts/tokens.css），业务禁硬编码色值字体 | 被 web 消费 |
 | services/api | Express 5 网关。presentation(路由 tasks/files/templates+中间件：workspace+error-handler+security 四件套+同源静态托管) → domain(契约/注册表/提示词渲染/LLM 编排/任务运行编排：含滞后扫描与 dualSource 双源对账/运行进度注册表，P2) → infrastructure(适配器/仓储/迁移/LLM 客户端与提供方解析/logger/rolling-pool worker 线程池与 rolling-worker 入口，P1) | DataProvider 契约（fetchHistory）插件式注册；LlmChatClient 传输契约；RunnerDeps 依赖注入（含可选 rollingExecutor 并行执行器，P1）；createApp(AppOptions) 安全基线可注入（rateLimit/cors/bodyLimit/logger）；pg + 手写 SQL 迁移；生产经 tsup 打包（tsup.config.ts 三入口 index/migrate/rolling-worker，@platform/* 内联）；启动清扫中断任务（P2） |
 | services/analysis-engine | 纯函数分析引擎：管道（T09）→ 卡方族（T10）→ 连续检验（T11）→ 校正（T12）→ 滚动窗口（T13）→ 数据真实性审计（T14）→ LLM 上下文构造（T15）→ 滞后扫描（lag.ts，PRD 模块 H） | 输入 NumericSeries[]/PreparedDataset/数值对/p 值批次/AuditPoint[]/TaskConfig+ResultTable+AuditTable，无 IO、无框架依赖；jstat 为 CJS 包，一律 default 导入（Node ESM 命名导入会 SyntaxError）；jstat.d.ts 经三斜线引用随源文件跨包传播 |
-| apps/web | React + Vite + AntD + tokens.css（禁 Tailwind）：新建分析向导（G6 模板载入/保存/复制分析预填；G11 派生序列编辑器；G12 CSV 第二文件双源审计）/三栏结果页（G10 七 Tab 含原始导出；P2/X1 运行中进度条轮询与失败重试）/历史任务列表（复制分析）；G7 路由级 React.lazy 懒加载 + manualChunks（vendor-antd/vendor-react 独立缓存）；lib/api.ts fetch 封装（credentials:'include'，出参过 Zod 校验）+ lib/export.ts 下载原语（downloadText 支撑 md/html）+ lib/export-report.ts 01~15 编号导出生成器 | 经 /api 调网关；样式一律 tokens.css 变量与语义类，页面补充样式在 app.css（仅引用 Token 变量） |
+| apps/web | React + Vite + AntD + tokens.css（禁 Tailwind）：新建分析向导（G6 模板载入/保存/复制分析预填；G11 派生序列编辑器；G12 CSV 第二文件双源审计；X2 克隆基线失效提示）/三栏结果页（G10 七 Tab 含原始导出；P2/X1 运行中进度条轮询与失败重试；X2 调整参数并重跑入口）/历史任务列表（复制分析）；G7 路由级 React.lazy 懒加载 + manualChunks（vendor-antd/vendor-react 独立缓存）；lib/api.ts fetch 封装（credentials:'include'，出参过 Zod 校验）+ lib/export.ts 下载原语（downloadText 支撑 md/html）+ lib/export-report.ts 01~15 编号导出生成器 | 经 /api 调网关；样式一律 tokens.css 变量与语义类，页面补充样式在 app.css（仅引用 Token 变量） |
 | infra/db | PostgreSQL 免管理员部署脚本 + 迁移 SQL（001 tasks/result_rows/audit_rows、002 uploaded_files、003 llm_artifacts、004 lag 约束放宽至 ±60、005 run_panels 导出面板快照、006 config_templates 分析模板） | migrate.ts 运行器（schema_migrations 记账）；start/stop-postgres.ps1 必须 UTF-8 带 BOM（PowerShell 5.1 无 BOM 时中文注释破坏解析） |
 | prompts/ | LLM 提示词模板 + output_schema.json（PRD 模块 K 10 字段声明，G8 已与 llmOutputSchema 对拍核验） | T16 经 loadPromptAssets 消费（版本号写入 llm_trace）；G8 loadOutputSchema 与 llmOutputSchema 双源一致性守卫测试 |
 

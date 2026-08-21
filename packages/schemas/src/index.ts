@@ -6,6 +6,7 @@
  */
 export * from './common';
 export * from './task';
+export * from './config-diff';
 export * from './template';
 export * from './result';
 export * from './audit';
