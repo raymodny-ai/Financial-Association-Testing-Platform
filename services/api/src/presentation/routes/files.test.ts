@@ -90,3 +90,53 @@ describe('GET /api/files（工作区归属）', () => {
     expect(cross.status).toBe(404);
   });
 });
+
+describe('DELETE /api/files/:id（X5 数据集管理）', () => {
+  it('删除本工作区文件：204 且后续单查/列表均不再可见', async () => {
+    const app = createApp();
+
+    const created = await request(app)
+      .post('/api/files')
+      .set('Content-Type', 'text/csv')
+      .set('x-filename', 'to-delete.csv')
+      .send(SAMPLE_CSV);
+    expect(created.status).toBe(201);
+    const cookie = extractWorkspaceCookie(created);
+    const fileId = created.body.id as string;
+
+    const del = await request(app).delete(`/api/files/${fileId}`).set('Cookie', cookie);
+    expect(del.status).toBe(204);
+
+    const gone = await request(app).get(`/api/files/${fileId}`).set('Cookie', cookie);
+    expect(gone.status).toBe(404);
+
+    const list = await request(app).get('/api/files').set('Cookie', cookie);
+    expect(list.body.items.some((f: { id: string }) => f.id === fileId)).toBe(false);
+  });
+
+  it('跨工作区删除 → 404 且文件保留；重复删除 → 404', async () => {
+    const app = createApp();
+
+    const created = await request(app)
+      .post('/api/files')
+      .set('Content-Type', 'text/csv')
+      .send(SAMPLE_CSV);
+    expect(created.status).toBe(201);
+    const cookieA = extractWorkspaceCookie(created);
+    const fileId = created.body.id as string;
+
+    // 新会话（工作区 B）跨删 → 404，文件仍在（防枚举同口径）
+    const cross = await request(app).delete(`/api/files/${fileId}`);
+    expect(cross.status).toBe(404);
+    const still = await request(app).get(`/api/files/${fileId}`).set('Cookie', cookieA);
+    expect(still.status).toBe(200);
+
+    // 本工作区删除后重复删除 → 404；非法 UUID → 404
+    const del = await request(app).delete(`/api/files/${fileId}`).set('Cookie', cookieA);
+    expect(del.status).toBe(204);
+    const again = await request(app).delete(`/api/files/${fileId}`).set('Cookie', cookieA);
+    expect(again.status).toBe(404);
+    const badUuid = await request(app).delete('/api/files/not-a-uuid').set('Cookie', cookieA);
+    expect(badUuid.status).toBe(404);
+  });
+});

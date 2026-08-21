@@ -8,7 +8,7 @@ packages: {
 
 services: {
   api: "services/api\nExpress 5 网关" {
-    presentation: "routes(tasks 含 run(202 异步)/progress/results、annotations 批注+favorite 收藏（X4）、files、templates 保存/列表/删除) + middleware(workspace/error-handler/security：helmet+限流+CORS+请求ID+UUID防护) + static(T20 同源托管 web 产物 + SPA 回退，WEB_DIST_DIR 可关)"
+    presentation: "routes(tasks 含 run(202 异步)/progress/results、annotations 批注+favorite 收藏（X4）、files 含 DELETE 数据集删除（X5）、templates 保存/列表/删除) + middleware(workspace/error-handler/security：helmet+限流+CORS+请求ID+UUID防护) + static(T20 同源托管 web 产物 + SPA 回退，WEB_DIST_DIR 可关)"
     domain: "DataProvider 契约 + provider-registry + analysis-runner 任务运行编排 + prompt-renderer + llm-service 编排 + run-progress 运行进度注册表（P2）"
     infrastructure: "adapters(yahoo/stooq/csv-parse/llm-http) + repositories(task/file/result+panel/llm_artifacts/template/annotation（X4）) + migrate/db + llm-config/prompt-assets/llm-runner + logger(JSON 行结构化日志) + rolling-pool/rolling-worker(worker_threads 滚动并行池，P1)"
   }
@@ -36,8 +36,12 @@ services: {
 
 apps: {
   web: "apps/web\nReact + Vite + AntD\nG7 路由懒加载 + vendor 分割" {
+    nav: "App 顶部导航七项对齐（X5：工作区/新建分析/数据集/分析结果/报告/历史任务/设置，高亮按路径前缀归属）"
+    workspace: "WorkspacePage 工作区总览（任务/文件/模板计数 + 功能入口，X5）"
+    datasets: "DatasetsPage 数据集管理（已上传 CSV 列表 + 删除确认，X5）"
+    reports: "ReportsPage 报告（已完成任务一键导出 15_full_report.html，X5）"
     home: "HomePage 新建分析向导（五步 Steps，safeParse 校验；G6 模板条载入/删除 + 保存为模板 + /?clone 预填；G11 派生序列编辑器；G12 CSV 第二文件双源审计；G13 研究问题；X2 克隆基线失效提示）"
-    results: "ResultsPage 三栏结果页（.layout-results + 风险固定条 + 七 Tab：分类/连续/滚动/滞后/审计/LLM/原始导出 + 导出；P2/X1 运行中进度条轮询与失败重试；X2 调整参数并重跑入口；X4 收藏星+复制分享链接+研究注释卡）"
+    results: "ResultsPage 三栏结果页（.layout-results + 风险固定条 + 七 Tab：分类/连续/滚动/滞后/审计/LLM/原始导出 + 导出；无参时为已完成任务索引直达（X5）；P2/X1 运行中进度条轮询与失败重试；X2 调整参数并重跑入口；X4 收藏星+复制分享链接+研究注释卡）"
     lag-chart: "LagCurveChart 零依赖 SVG 滞后曲线图（与表格双视图，PRD 模块 H）"
     history: "HistoryPage 任务列表（状态标签 + 重跑 + 复制分析；X4 收藏星标展示）"
     lib: "lib/api.ts fetch 封装（credentials:'include' + Zod 出参校验，含 panel 快照） + lib/export.ts 下载原语 + lib/export-report.ts 01~15 编号导出生成器"

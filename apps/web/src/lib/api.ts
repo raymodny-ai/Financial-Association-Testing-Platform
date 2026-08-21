@@ -221,6 +221,11 @@ export function listFiles(): Promise<UploadedFile[]> {
   );
 }
 
+/** 删除上传文件（X5 数据集管理；204 无响应体） */
+export function deleteFile(fileId: string): Promise<null> {
+  return request<null>(`/files/${fileId}`, { method: 'DELETE' });
+}
+
 /* ------------------------------------------------------------------ */
 /* 分析模板（G6：PRD「保存模板 / 复制分析 / 重新运行同配置」）     */
 /* ------------------------------------------------------------------ */

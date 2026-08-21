@@ -1,16 +1,18 @@
 import { useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Button, Card, Empty, Input, Progress, Space, Spin, Table, Tabs, Tag, Typography, message } from 'antd';
 import { ShareAltOutlined, StarFilled, StarOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
-import type { AuditRow, LlmOutput, ResultRow } from '@platform/schemas';
+import dayjs from 'dayjs';
+import type { AuditRow, LlmOutput, ResultRow, TaskRecord } from '@platform/schemas';
 import {
   createAnnotation,
   deleteAnnotation,
   getTaskProgress,
   getTaskResults,
   listAnnotations,
+  listTasks,
   runTask,
   setFavorite,
 } from '../lib/api';
@@ -74,6 +76,14 @@ const LLM_OUTPUT_SECTIONS: Array<{ key: keyof LlmOutput; label: string }> = [
 
 export default function ResultsPage() {
   const { taskId } = useParams<{ taskId: string }>();
+  const navigate = useNavigate();
+
+  // X5：/results 无参时为结果索引（已完成任务直达），仅缺参时启用避免多余请求
+  const taskListQuery = useQuery({
+    queryKey: ['tasks'],
+    queryFn: listTasks,
+    enabled: taskId === undefined,
+  });
 
   const query = useQuery({
     queryKey: ['task-results', taskId],
@@ -146,12 +156,43 @@ export default function ResultsPage() {
   }, [data]);
 
   if (taskId === undefined) {
+    const completed = (taskListQuery.data ?? []).filter((t) => t.status === 'completed');
+    const indexColumns: ColumnsType<TaskRecord> = [
+      { title: '项目名称', render: (_: unknown, record: TaskRecord) => <Typography.Text strong>{record.config.projectName}</Typography.Text> },
+      {
+        title: '更新时间',
+        dataIndex: 'updatedAt',
+        width: 180,
+        render: (v: string) => <span className="font-data">{dayjs(v).format('YYYY-MM-DD HH:mm:ss')}</span>,
+      },
+      {
+        title: '操作',
+        width: 140,
+        render: (_: unknown, record: TaskRecord) => (
+          <Button size="small" type="primary" onClick={() => navigate(`/results/${record.id}`)}>
+            查看结果
+          </Button>
+        ),
+      },
+    ];
     return (
       <Card>
         <Typography.Title level={3} className="font-display">
           分析结果
         </Typography.Title>
-        <Empty description={<>请从 <Link to="/history">历史任务</Link> 选择一个已完成任务查看结果，或<Link to="/">新建分析</Link></>} />
+        <Table<TaskRecord>
+          rowKey="id"
+          size="small"
+          columns={indexColumns}
+          dataSource={completed}
+          loading={taskListQuery.isLoading}
+          pagination={false}
+          locale={{
+            emptyText: (
+              <Empty description={<>尚无已完成任务，请 <Link to="/">新建分析</Link>，或从 <Link to="/history">历史任务</Link> 查看运行中任务</>} />
+            ),
+          }}
+        />
       </Card>
     );
   }

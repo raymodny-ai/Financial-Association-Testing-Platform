@@ -59,4 +59,13 @@ export const fileRepository = {
     );
     return rows[0] ?? null;
   },
+
+  /** 工作区作用域删除（X5 数据集管理）：命中返回 true，不存在/跨工作区返回 false */
+  async deleteScoped(id: string, workspaceId: string): Promise<boolean> {
+    const result = await pool.query(
+      'DELETE FROM uploaded_files WHERE id = $1 AND workspace_id = $2',
+      [id, workspaceId],
+    );
+    return (result.rowCount ?? 0) > 0;
+  },
 };

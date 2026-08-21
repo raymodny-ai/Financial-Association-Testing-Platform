@@ -3,6 +3,7 @@
  * POST /api/files        —— 上传 CSV 原文（Content-Type: text/csv，文件名走 x-filename 头，URI 编码兼容中文）
  * GET  /api/files        —— 列出当前工作区文件元数据
  * GET  /api/files/:id    —— 单文件元数据 + 原文（任务执行期按 columnMapping 解析）
+ * DELETE /api/files/:id  —— 删除本工作区文件（X5 数据集管理；无外键引用，删后旧任务重跑报缺文件）
  *
  * 说明：前端以 File.text() 读取原文后原样 POST，避免引入 multipart 依赖。
  */
@@ -85,4 +86,12 @@ filesRouter.get('/:id', async (req, res) => {
   const row = await fileRepository.findByIdScoped(req.params.id, workspaceId);
   if (!row) throw new NotFoundError('文件不存在');
   res.json({ ...toRecord(row), content: row.content });
+});
+
+filesRouter.delete('/:id', async (req, res) => {
+  const workspaceId = requireWorkspace(req);
+  assertUuidParam(req.params.id);
+  const deleted = await fileRepository.deleteScoped(req.params.id, workspaceId);
+  if (!deleted) throw new NotFoundError('文件不存在');
+  res.status(204).send();
 });
