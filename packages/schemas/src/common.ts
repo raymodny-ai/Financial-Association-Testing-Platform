@@ -30,8 +30,8 @@ export type TestFamily = z.infer<typeof testFamilySchema>;
 export const auditStatusSchema = z.enum(['pass', 'warn', 'fail']);
 export type AuditStatus = z.infer<typeof auditStatusSchema>;
 
-/** 分箱方法 */
-export const binningMethodSchema = z.enum(['quantile', 'equal_width', 'fixed_threshold']);
+/** 分箱方法（stddev 标准差分箱，S2） */
+export const binningMethodSchema = z.enum(['quantile', 'equal_width', 'fixed_threshold', 'stddev']);
 export type BinningMethod = z.infer<typeof binningMethodSchema>;
 
 /** 多重检验校正方法 */

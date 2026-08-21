@@ -75,14 +75,35 @@ export const periodSplitSchema = z.object({
 });
 export type PeriodSplit = z.infer<typeof periodSplitSchema>;
 
-/** 分箱配置 */
-export const binningConfigSchema = z.object({
-  method: binningMethodSchema.default('quantile'),
-  /** 分位数分箱的桶数（默认三分） */
-  bins: z.number().int().min(2).max(10).default(DEFAULTS.binningBins),
-  /** 分类标签（与桶数等长） */
-  labels: z.array(z.string().min(1)).optional(),
-});
+/** 分箱配置（fixed_threshold 须携带用户阈值，其余方法禁用；S2 缺口 N7 转正） */
+export const binningConfigSchema = z
+  .object({
+    method: binningMethodSchema.default('quantile'),
+    /** 分位数分箱的桶数（默认三分） */
+    bins: z.number().int().min(2).max(10).default(DEFAULTS.binningBins),
+    /** 分类标签（与桶数等长） */
+    labels: z.array(z.string().min(1)).optional(),
+    /** 固定阈值分箱的用户阈值（升序，长度 = bins-1）：仅 fixed_threshold 使用 */
+    thresholds: z.array(z.number()).optional(),
+  })
+  .refine((c) => (c.method === 'fixed_threshold') === (c.thresholds !== undefined), {
+    message: '固定阈值分箱（fixed_threshold）须携带用户阈值（thresholds），且仅限该方法使用',
+    path: ['thresholds'],
+  })
+  .refine(
+    (c) => c.thresholds === undefined || c.thresholds.length === c.bins - 1,
+    {
+      message: '固定阈值个数须等于桶数减一（bins - 1）',
+      path: ['thresholds'],
+    },
+  )
+  .refine((c) => {
+      const ts = c.thresholds;
+      return ts === undefined || ts.every((t, i) => i === 0 || t > ts[i - 1]!);
+    }, {
+      message: '固定阈值须严格递增',
+      path: ['thresholds'],
+    });
 export type BinningConfig = z.infer<typeof binningConfigSchema>;
 
 /** 滚动窗口检验方法（与引擎 ROLLING_METHODS + ROLLING_EXTRA_METHODS 同源；hsic 为可选扩展，H2） */

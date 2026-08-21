@@ -59,9 +59,30 @@ export function fitBinning(referenceValues: readonly number[], config: BinningCo
     for (let k = 1; k < bins; k += 1) {
       thresholds.push(min + k * width);
     }
+  } else if (method === 'fixed_threshold') {
+    // 用户阈值直用（S2，缺口 N7 转正）：不从参考期拟合，合法性由契约守卫（升序、长度 = bins-1）
+    const user = config.thresholds;
+    if (!user || user.length !== bins - 1) {
+      throw new RangeError(`固定阈值个数须等于桶数减一：期望 ${bins - 1} 个，实际 ${user?.length ?? 0} 个`);
+    }
+    for (let k = 1; k < user.length; k += 1) {
+      if (user[k]! <= user[k - 1]!) {
+        throw new RangeError(`固定阈值须严格递增（索引 ${k} 处不满足）`);
+      }
+    }
+    thresholds.push(...user);
   } else {
-    // fixed_threshold：契约缺 thresholds 字段（缺口 N7），MVP 不支持
-    throw new RangeError(`MVP 暂不支持分箱方法：${method}`);
+    // stddev：以参考期均值为中心、σ（样本标准差，ddof=1）为间隔对称布点（S2）
+    if (referenceValues.length < 2) {
+      throw new RangeError('标准差分箱需要至少 2 个参考期观测值以估计标准差');
+    }
+    const mean = referenceValues.reduce((s, v) => s + v, 0) / referenceValues.length;
+    const variance =
+      referenceValues.reduce((s, v) => s + (v - mean) ** 2, 0) / (referenceValues.length - 1);
+    const sd = Math.sqrt(variance);
+    for (let k = 1; k < bins; k += 1) {
+      thresholds.push(mean + (k - bins / 2) * sd);
+    }
   }
 
   return {

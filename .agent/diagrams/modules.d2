@@ -15,7 +15,7 @@ services: {
   analysis-engine: "services/analysis-engine\n纯函数分析引擎" {
     transform: "派生变换 pct/log/diff"
     align: "日期交集对齐"
-    binning: "分箱 fit/assign + quantileLinear"
+    binning: "分箱 fit/assign + quantileLinear（四法：quantile/equal_width/fixed_threshold/stddev，S2）"
     pipeline: "prepareDataset 编排"
     chi2: "chi2sf（jstat 卡方 CDF 包装）"
     chi-square: "独立性/拟合优度/同质性三检验 + 适用性报告"

@@ -73,6 +73,66 @@ describe('fitBinning', () => {
   });
 });
 
+describe('fitBinning · fixed_threshold 用户阈值直用（S2，缺口 N7 转正）', () => {
+  it('用户阈值原样采用，不从参考期拟合', () => {
+    const fitted = fitBinning([1, 2, 3, 4, 5, 6, 7, 8, 9], {
+      method: 'fixed_threshold',
+      bins: 3,
+      thresholds: [-1, 0.5],
+    });
+    expect(fitted.thresholds).toEqual([-1, 0.5]);
+    expect(fitted.labels).toEqual(['bin_1', 'bin_2', 'bin_3']);
+  });
+
+  it('阈值个数与桶数不一致（须 bins-1 个）抛错', () => {
+    expect(() =>
+      fitBinning([1, 2, 3, 4], { method: 'fixed_threshold', bins: 3, thresholds: [1] }),
+    ).toThrow(/阈值个数/);
+  });
+
+  it('阈值非严格递增抛错', () => {
+    expect(() =>
+      fitBinning([1, 2, 3, 4], { method: 'fixed_threshold', bins: 3, thresholds: [2, 1] }),
+    ).toThrow(/严格递增/);
+  });
+
+  it('参考期零跨度仍拒绝（离散化无意义）', () => {
+    expect(() =>
+      fitBinning([5, 5, 5], { method: 'fixed_threshold', bins: 2, thresholds: [5] }),
+    ).toThrow(/零跨度/);
+  });
+});
+
+describe('fitBinning · stddev 标准差分箱（S2）', () => {
+  it('均值 ± σ/2 对称阈值（bins=3，样本标准差 ddof=1）', () => {
+    // [1..5]：mean=3，σ=√(10/4)=√2.5；阈值 = 3 ± 0.5σ ≈ [1.7420, 4.2580]
+    const fitted = fitBinning([1, 2, 3, 4, 5], { method: 'stddev', bins: 3 });
+    expect(fitted.thresholds).toHaveLength(2);
+    const sd = Math.sqrt(2.5);
+    expect(Math.abs(fitted.thresholds[0]! - (3 - 0.5 * sd))).toBeLessThan(1e-9);
+    expect(Math.abs(fitted.thresholds[1]! - (3 + 0.5 * sd))).toBeLessThan(1e-9);
+  });
+
+  it('bins=2 阈值即均值', () => {
+    const fitted = fitBinning([1, 2, 3, 4], { method: 'stddev', bins: 2 });
+    expect(fitted.thresholds).toEqual([2.5]);
+  });
+
+  it('bins=4 以均值为中心 ±σ 对称（偶数桶阈值含均值）', () => {
+    // [2,4,6,8,10,12]：mean=7，样本方差=70/5=14（ddof=1）；阈值 7−σ, 7, 7+σ
+    const fitted = fitBinning([2, 4, 6, 8, 10, 12], { method: 'stddev', bins: 4 });
+    const sd = Math.sqrt(14);
+    expect(fitted.thresholds).toHaveLength(3);
+    [7 - sd, 7, 7 + sd].forEach((expected, i) => {
+      expect(Math.abs(fitted.thresholds[i]! - expected)).toBeLessThan(1e-9);
+    });
+  });
+
+  it('观测不足两个无法估计标准差抛错', () => {
+    expect(() => fitBinning([3], { method: 'stddev', bins: 2 })).toThrow(/观测值不足/);
+  });
+});
+
 describe('assignBins · 检验期复用参考期阈值', () => {
   it('对拍黄金基准 assignments（value<=阈值归入下箱）', () => {
     const ref = fixture.tertile_bins;

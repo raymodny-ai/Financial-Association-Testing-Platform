@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   analysisTemplateSchema,
   auditRowSchema,
+  binningConfigSchema,
   createTemplateRequestSchema,
   derivedSeriesSchema,
   llmContextSchema,
@@ -207,6 +208,47 @@ describe('derivedSeriesSchema 比值变换守卫（S3）', () => {
 
   it('既有单源变换不带 denominatorAlias 保持通过', () => {
     expect(derivedSeriesSchema.parse({ alias: 'C', sourceAlias: 'A', transform: 'diff' }).transform).toBe('diff');
+  });
+});
+
+describe('binningConfigSchema 分箱方法守卫（S2，缺口 N7 转正）', () => {
+  it('fixed_threshold 携带合法阈值通过', () => {
+    const parsed = binningConfigSchema.parse({
+      method: 'fixed_threshold',
+      bins: 3,
+      thresholds: [-1, 0.5],
+    });
+    expect(parsed.thresholds).toEqual([-1, 0.5]);
+  });
+
+  it('fixed_threshold 缺 thresholds 拒绝', () => {
+    expect(() => binningConfigSchema.parse({ method: 'fixed_threshold', bins: 3 })).toThrow(
+      /固定阈值/,
+    );
+  });
+
+  it('非 fixed_threshold 携带 thresholds 拒绝', () => {
+    expect(() =>
+      binningConfigSchema.parse({ method: 'quantile', bins: 3, thresholds: [1] }),
+    ).toThrow(/固定阈值/);
+  });
+
+  it('阈值个数与桶数不一致（须 bins-1 个）拒绝', () => {
+    expect(() =>
+      binningConfigSchema.parse({ method: 'fixed_threshold', bins: 3, thresholds: [1] }),
+    ).toThrow(/阈值个数/);
+  });
+
+  it('阈值非严格递增拒绝', () => {
+    expect(() =>
+      binningConfigSchema.parse({ method: 'fixed_threshold', bins: 3, thresholds: [2, 1] }),
+    ).toThrow(/严格递增/);
+  });
+
+  it('stddev 分箱方法通过且默认桶数填充', () => {
+    const parsed = binningConfigSchema.parse({ method: 'stddev' });
+    expect(parsed.method).toBe('stddev');
+    expect(parsed.bins).toBe(3);
   });
 });
 

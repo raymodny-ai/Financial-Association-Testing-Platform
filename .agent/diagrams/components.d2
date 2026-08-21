@@ -7,7 +7,7 @@ analysis-engine: "services/analysis-engine/src" {
   align: "alignSeries(seriesList) → AlignedPanel\n日期交集、升序、重复日期拒绝"
   binning: {
     quantileLinear: "quantileLinear(values, q)\nnumpy linear 等价"
-    fitBinning: "fitBinning(referenceValues, config)\n观测数<箱数/零跨度抛错"
+    fitBinning: "fitBinning(referenceValues, config)\n观测数<箱数/零跨度抛错\n四法：quantile/equal_width/fixed_threshold（用户阈值直用，S2）/stddev（均值±σ，S2）"
     assignBins: "assignBins(values, fitted)\nvalue ≤ 阈值归下箱"
   }
   pipeline: "prepareDataset({series, derivedSeries, periods, binning})\n→ PreparedDataset{aliases, dates, values, referenceIndex, testIndex, categories, binning}"

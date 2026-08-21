@@ -13,7 +13,7 @@
 | AlignedPanel | 日期交集对齐后的面板：共享升序日期轴 + aliases + values 矩阵。 |
 | 参考期 / 检验期 | PeriodSplit 闭区间。参考期用于拟合分箱阈值；检验期复用阈值做检验（可复现方法学）。 |
 | 派生序列（DerivedSeries） | 由源序列经 pct_return/log_return/diff 变换派生，首点丢弃；ratio（S3）为双源变换：分子/分母按公共日期逐点相除不丢首点，契约 refine 守卫 denominatorAlias 与 ratio 互锁。 |
-| 分箱拟合（fit/assign 分离） | fitBinning 仅在参考期拟合阈值；assignBins 对全轴复用。value ≤ 阈值归下箱，越界归首/末箱。 |
+| 分箱拟合（fit/assign 分离） | fitBinning 仅在参考期拟合阈值；assignBins 对全轴复用。value ≤ 阈值归下箱，越界归首/末箱。四法：quantile/equal_width/fixed_threshold（S2 转正：用户阈值直用不拟合，契约 thresholds 与 method 互锁且升序、长度 = bins−1）/stddev（S2：均值中心 ± σ 间隔对称布点，样本标准差 ddof=1，偶数桶阈值含均值）。 |
 | quantileLinear | numpy.quantile(method='linear') 等价实现：pos = q*(n-1) 线性插值。 |
 | chi2sf | 卡方分布生存函数 P(χ²>x)，p 值计算通道；jstat 仅提供 CDF（ADR 001），已对偶数 df 闭式解验证达 1e-9。 |
 | 期望频数适用性 | 卡方近似条件报告：minExpected、fractionExpectedBelow5、adequate(=minExpected≥5)；不满足时必须警告而非静默执行（PRD）。 |

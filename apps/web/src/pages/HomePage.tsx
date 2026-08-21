@@ -27,6 +27,7 @@ import {
   DEFAULTS,
   taskConfigSchema,
   type AnalysisTemplate,
+  type BinningMethod,
   type DerivedSeries,
   type RollingMethod,
   type TaskConfig,
@@ -151,8 +152,10 @@ export default function HomePage() {
   const [testStart, setTestStart] = useState<Dayjs | null>(null);
   const [testEnd, setTestEnd] = useState<Dayjs | null>(null);
 
-  const [binningMethod, setBinningMethod] = useState<'quantile' | 'equal_width' | 'fixed_threshold'>('quantile');
+  const [binningMethod, setBinningMethod] = useState<BinningMethod>('quantile');
   const [bins, setBins] = useState<number>(DEFAULTS.binningBins);
+  /** 固定阈值分箱的用户阈值（逗号分隔文本，S2） */
+  const [thresholdsText, setThresholdsText] = useState('');
   const [rollingEnabled, setRollingEnabled] = useState(true);
   const [windowDays, setWindowDays] = useState<number>(DEFAULTS.rollingWindowDays);
   const [stepDays, setStepDays] = useState<number>(DEFAULTS.rollingStepDays);
@@ -269,7 +272,24 @@ export default function HomePage() {
     (startDate === null || !referenceStart.isBefore(startDate, 'day')) &&
     (endDate === null || !testEnd.isAfter(endDate, 'day'));
 
-  const stepValid = [step0Valid, step1Valid, step2Valid, true, true][step];
+  /** 固定阈值解析（S2）：非 fixed_threshold 时为 null；个数/递增校验前置，错误交由契约兑底 */
+  const thresholdsParsed = useMemo(() => {
+    if (binningMethod !== 'fixed_threshold') return null;
+    const parts = thresholdsText.split(',').map((s) => s.trim()).filter((s) => s !== '');
+    const values = parts.map(Number);
+    if (parts.length === 0 || values.some((v) => !Number.isFinite(v))) {
+      return { values: [] as number[], error: '请输入数值阈值（逗号分隔）' };
+    }
+    if (values.length !== bins - 1) {
+      return { values, error: `阈值个数须为 ${bins - 1}（桶数减一），当前 ${values.length} 个` };
+    }
+    if (!values.every((v, i) => i === 0 || v > values[i - 1]!)) {
+      return { values, error: '阈值须严格递增' };
+    }
+    return { values, error: null };
+  }, [binningMethod, thresholdsText, bins]);
+
+  const stepValid = [step0Valid, step1Valid, step2Valid, thresholdsParsed?.error == null, true][step];
 
   /* ---------------- 组装配置（契约字段全集） ---------------- */
 
@@ -325,7 +345,13 @@ export default function HomePage() {
         testStart: fmt(testStart),
         testEnd: fmt(testEnd),
       },
-      binning: { method: binningMethod, bins },
+      binning: {
+        method: binningMethod,
+        bins,
+        ...(thresholdsParsed !== null && thresholdsParsed.error === null
+          ? { thresholds: thresholdsParsed.values }
+          : {}),
+      },
       tests: { alpha, correction, permutations, permutationSeed: 20260819 },
       rolling: {
         enabled: rollingEnabled,
@@ -344,7 +370,7 @@ export default function HomePage() {
     // 预览步刷新时机：进入第 4 步或点击运行时重算即可，此处保持轻量依赖
     step, sources, derived, researchQuestion, projectName, startDate, endDate, frequency,
     referenceStart, referenceEnd, testStart, testEnd,
-    binningMethod, bins, rollingEnabled, windowDays, stepDays, minSamples, rollingMethods,
+    binningMethod, bins, thresholdsText, rollingEnabled, windowDays, stepDays, minSamples, rollingMethods,
     alpha, correction, permutations, maxLag,
   ]);
 
@@ -388,6 +414,7 @@ export default function HomePage() {
     setTestEnd(dayjs(config.periods.testEnd));
     setBinningMethod(config.binning.method);
     setBins(config.binning.bins);
+    setThresholdsText(config.binning.thresholds?.join(', ') ?? '');
     setRollingEnabled(config.rolling.enabled);
     setWindowDays(config.rolling.windowDays);
     setStepDays(config.rolling.stepDays);
@@ -955,9 +982,24 @@ export default function HomePage() {
                     { label: '分位数分箱（推荐）', value: 'quantile' },
                     { label: '等宽分箱', value: 'equal_width' },
                     { label: '固定阈值', value: 'fixed_threshold' },
+                    { label: '标准差分箱（均值 ± σ）', value: 'stddev' },
                   ]}
                 />
               </div>
+              {binningMethod === 'fixed_threshold' && (
+                <div>
+                  <span className="field-label">用户阈值（升序，逗号分隔）</span>
+                  <Input
+                    value={thresholdsText}
+                    placeholder={`共 ${bins - 1} 个，例如：-1, 0.5`}
+                    status={thresholdsParsed?.error != null ? 'error' : undefined}
+                    onChange={(e) => setThresholdsText(e.target.value)}
+                  />
+                  {thresholdsParsed?.error != null && (
+                    <span className="field-hint field-hint-error">{thresholdsParsed.error}</span>
+                  )}
+                </div>
+              )}
               <div>
                 <span className="field-label">分箱桶数</span>
                 <InputNumber value={bins} min={2} max={10} style={{ width: '100%' }} onChange={(v) => setBins(v ?? DEFAULTS.binningBins)} />
@@ -1073,7 +1115,7 @@ export default function HomePage() {
                     { key: 'derived', label: '派生序列', children: derived.length === 0 ? '无' : derived.map((d) => `${d.alias} ← ${d.sourceAlias}${d.transform === 'ratio' ? `/${d.denominatorAlias ?? '?'}` : ''}（${TRANSFORM_OPTIONS.find((t) => t.value === d.transform)?.label ?? d.transform}）`).join('、') },
                     { key: 'range', label: '样本区间', children: `${startDate?.format(DATE_FORMAT) ?? ''} ~ ${endDate?.format(DATE_FORMAT) ?? ''}` },
                     { key: 'periods', label: '参考期 / 检验期', children: `${referenceStart?.format(DATE_FORMAT) ?? ''} ~ ${referenceEnd?.format(DATE_FORMAT) ?? ''} / ${testStart?.format(DATE_FORMAT) ?? ''} ~ ${testEnd?.format(DATE_FORMAT) ?? ''}` },
-                    { key: 'binning', label: '分箱', children: `${binningMethod} × ${bins} 桶` },
+                    { key: 'binning', label: '分箱', children: `${binningMethod} × ${bins} 桶${binningMethod === 'fixed_threshold' && thresholdsParsed !== null && thresholdsParsed.error === null ? `（阈值：${thresholdsParsed.values.join('、')}）` : ''}` },
                     { key: 'tests', label: '检验选项', children: `α=${alpha}，校正=${correction}，置换=${permutations}，最大滞后=${maxLag}` },
                     { key: 'rolling', label: '滚动窗口', children: rollingEnabled ? `${windowDays} 日 / 步长 ${stepDays}${minSamples !== null ? ` / 最小样本 ${minSamples}` : ''} / ${rollingMethods.length} 法` : '关闭' },
                   ]}

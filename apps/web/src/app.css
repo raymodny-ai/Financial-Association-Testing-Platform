@@ -56,6 +56,14 @@
   margin-bottom: var(--space-1);
 }
 
+/* 字段级错误提示（S2 固定阈值输入校验） */
+.field-hint-error {
+  display: block;
+  color: #d4380d;
+  font-size: var(--text-caption);
+  margin-top: var(--space-1);
+}
+
 /* 检验选项步方法说明（X3）：跨满表单网格，双列紧凑列表 */
 .method-guide {
   grid-column: 1 / -1;
