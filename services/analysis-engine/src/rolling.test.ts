@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { PreparedDataset } from './pipeline.js';
 import { pairwiseChiSquare } from './chi-square-dataset.js';
+import { hsicTest } from './hsic.js';
 import { permutationMiTest } from './mutual-information.js';
 import { planWindows, rollingWindowTests } from './rolling.js';
 
@@ -155,6 +156,31 @@ describe('rollingWindowTests · 黄金基准对拍（容差 1e-9）', () => {
     expect(report.rows[0]!.pValue).toBe(reference.pValue);
     expect(report.rows[0]!.effectSize).toBeNull();
   });
+
+  it('全检验期单窗口 HSIC 与 hsicTest 组合一致（可选扩展法，H2）', () => {
+    const dataset = buildDataset();
+    const report = rollingWindowTests(dataset, {
+      windowSize: 8,
+      stepSize: 8,
+      methods: ['hsic'],
+      hsic: { permutations: 99, seed: 0 },
+    });
+    const reference = hsicTest(dataset.values[0]!, dataset.values[1]!, {
+      permutations: 99,
+      seed: 0,
+    });
+    expect(report.rows).toHaveLength(1);
+    expect(report.rows[0]!.statValue).toBeCloseTo(reference.hsic, 12);
+    expect(report.rows[0]!.pValue).toBe(reference.pValue);
+    expect(report.rows[0]!.effectSize).toBeCloseTo(reference.normalizedHsic, 12);
+    expect(report.rows[0]!.notes).toContain('高斯核');
+  });
+
+  it('默认方法不含 hsic（保持四法默认，避免窗口级计算量膨胀）', () => {
+    const dataset = buildDataset();
+    const report = rollingWindowTests(dataset, { windowSize: 8, stepSize: 8 });
+    expect(report.rows.map((r) => r.testName)).not.toContain('hsic');
+  });
 });
 
 describe('rollingWindowTests · 退化窗口与接缝校验', () => {
@@ -198,7 +224,7 @@ describe('rollingWindowTests · 退化窗口与接缝校验', () => {
   it('未知方法拒绝', () => {
     expect(() =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      rollingWindowTests(buildDataset(), { windowSize: 4, stepSize: 4, methods: ['hsic'] as any }),
+      rollingWindowTests(buildDataset(), { windowSize: 4, stepSize: 4, methods: ['ghost_method'] as any }),
     ).toThrow(/方法/);
   });
 });

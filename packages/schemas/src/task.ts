@@ -79,12 +79,13 @@ export const binningConfigSchema = z.object({
 });
 export type BinningConfig = z.infer<typeof binningConfigSchema>;
 
-/** 滚动窗口检验方法（与引擎 ROLLING_METHODS 同源） */
+/** 滚动窗口检验方法（与引擎 ROLLING_METHODS + ROLLING_EXTRA_METHODS 同源；hsic 为可选扩展，H2） */
 export const rollingMethodSchema = z.enum([
   'chi_square_independence',
   'pearson',
   'spearman',
   'mutual_information',
+  'hsic',
 ]);
 export type RollingMethod = z.infer<typeof rollingMethodSchema>;
 

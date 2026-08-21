@@ -94,13 +94,19 @@ function newDraftSource(): DraftSource {
 
 const STEP_TITLES = ['数据源', '样本区间', '期间划分', '检验选项', '预览与运行'];
 
-/** 滚动窗口检验方法选项（与契约 rollingMethodSchema 同源，G5 前端透传） */
+/** 滚动窗口检验方法选项（与契约 rollingMethodSchema 同源，G5 前端透传；hsic 为可选扩展，H2） */
 const ROLLING_METHOD_OPTIONS: Array<{ value: RollingMethod; label: string }> = [
   { value: 'chi_square_independence', label: '卡方独立性' },
   { value: 'pearson', label: 'Pearson 相关' },
   { value: 'spearman', label: 'Spearman 相关' },
   { value: 'mutual_information', label: '互信息（置换）' },
+  { value: 'hsic', label: 'HSIC 核独立性（计算量较大）' },
 ];
+
+/** 默认滚动方法子集：引擎默认四法，hsic 需用户显式勾选（窗口级 O(n²)×B 置换，耗时明显） */
+const DEFAULT_ROLLING_METHODS: RollingMethod[] = ROLLING_METHOD_OPTIONS
+  .filter((o) => o.value !== 'hsic')
+  .map((o) => o.value);
 
 /** 派生序列变换选项（与契约 derivedSeriesSchema.transform 同源，G11） */
 const TRANSFORM_OPTIONS: Array<{ value: DerivedSeries['transform']; label: string }> = [
@@ -138,8 +144,8 @@ export default function HomePage() {
   const [stepDays, setStepDays] = useState<number>(DEFAULTS.rollingStepDays);
   /** 最小样本量；null = 缺省（引擎默认仅完整窗口） */
   const [minSamples, setMinSamples] = useState<number | null>(null);
-  /** 滚动检验方法子集；默认全部四法 */
-  const [rollingMethods, setRollingMethods] = useState<RollingMethod[]>(ROLLING_METHOD_OPTIONS.map((o) => o.value));
+  /** 滚动检验方法子集；默认四法（hsic 可选扩展，H2） */
+  const [rollingMethods, setRollingMethods] = useState<RollingMethod[]>(DEFAULT_ROLLING_METHODS);
   const [alpha, setAlpha] = useState<number>(DEFAULTS.alpha);
   const [correction, setCorrection] = useState<'none' | 'bonferroni' | 'bh' | 'by'>('bh');
   const [permutations, setPermutations] = useState<number>(1000);
@@ -364,7 +370,7 @@ export default function HomePage() {
     setWindowDays(config.rolling.windowDays);
     setStepDays(config.rolling.stepDays);
     setMinSamples(config.rolling.minSamples ?? null);
-    setRollingMethods(config.rolling.methods ?? ROLLING_METHOD_OPTIONS.map((o) => o.value));
+    setRollingMethods(config.rolling.methods ?? DEFAULT_ROLLING_METHODS);
     setAlpha(config.tests.alpha);
     setCorrection(config.tests.correction);
     setPermutations(config.tests.permutations);

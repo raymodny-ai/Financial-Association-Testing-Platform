@@ -14,6 +14,7 @@
 import { chiSquareIndependence } from './chi-square.js';
 import { countContingency, pruneZeroMargins } from './chi-square-dataset.js';
 import { pearsonTest, spearmanTest } from './correlation.js';
+import { hsicTest } from './hsic.js';
 import { permutationMiTest } from './mutual-information.js';
 import type { PreparedDataset } from './pipeline.js';
 
@@ -23,7 +24,10 @@ export const ROLLING_METHODS = [
   'spearman',
   'mutual_information',
 ] as const;
-export type RollingMethod = (typeof ROLLING_METHODS)[number];
+/** 可选扩展方法（H2）：核独立性检验，计算量较大，不入默认四法 */
+export const ROLLING_EXTRA_METHODS = ['hsic'] as const;
+const ALL_ROLLING_METHODS = [...ROLLING_METHODS, ...ROLLING_EXTRA_METHODS] as const;
+export type RollingMethod = (typeof ALL_ROLLING_METHODS)[number];
 
 export interface WindowPlanOptions {
   /** 窗口长度（观测数，≥2） */
@@ -61,10 +65,12 @@ export function planWindows(observationCount: number, options: WindowPlanOptions
 }
 
 export interface RollingWindowOptions extends WindowPlanOptions {
-  /** 参与滚动重算的方法（默认全部四法，按 ROLLING_METHODS 顺序输出） */
+  /** 参与滚动重算的方法（默认四法，按 ROLLING_METHODS 顺序输出；hsic 为可选扩展） */
   methods?: readonly RollingMethod[];
   /** 互信息置换检验参数（默认 bins=3 / permutations=199 / seed=0，确定性可复现） */
   mi?: { bins: number; permutations: number; seed: number };
+  /** HSIC 置换检验参数（默认 permutations=99 / seed=0；窗口级 O(n²)×B，置换数从紧） */
+  hsic?: { permutations: number; seed: number };
 }
 
 export interface RollingWindowRow {
@@ -98,6 +104,7 @@ function runWindowMethod(
   start: number,
   end: number,
   mi: { bins: number; permutations: number; seed: number },
+  hsicOptions: { permutations: number; seed: number },
 ): { statValue: number; pValue: number; effectSize: number | null; notes: string | null } {
   const leftValues = dataset.values[dataset.aliases.indexOf(leftAlias)]!.slice(start, end + 1);
   const rightValues = dataset.values[dataset.aliases.indexOf(rightAlias)]!.slice(start, end + 1);
@@ -117,6 +124,15 @@ function runWindowMethod(
       pValue: result.pValue,
       effectSize: null,
       notes: `等频 ${mi.bins} 箱离散化 + 置换检验 B=${result.permutations}（seed=${mi.seed}）`,
+    };
+  }
+  if (method === 'hsic') {
+    const result = hsicTest(leftValues, rightValues, hsicOptions);
+    return {
+      statValue: result.hsic,
+      pValue: result.pValue,
+      effectSize: result.normalizedHsic,
+      notes: `高斯核（中位数带宽）+ 置换检验 B=${result.permutations}（seed=${hsicOptions.seed}）`,
     };
   }
 
@@ -160,11 +176,12 @@ export function rollingWindowTests(
 ): RollingWindowReport {
   const methods = options.methods ?? ROLLING_METHODS;
   for (const method of methods) {
-    if (!ROLLING_METHODS.includes(method)) {
+    if (!ALL_ROLLING_METHODS.includes(method)) {
       throw new RangeError(`未知滚动窗口检验方法：${method}`);
     }
   }
   const mi = options.mi ?? { bins: 3, permutations: 199, seed: 0 };
+  const hsicOptions = options.hsic ?? { permutations: 99, seed: 0 };
 
   const [testStart, testEnd] = dataset.testIndex;
   const testLength = testEnd - testStart + 1;
@@ -183,7 +200,7 @@ export function rollingWindowTests(
         const windowEndDate = dataset.dates[end]!;
         for (const method of methods) {
           try {
-            const computed = runWindowMethod(method, dataset, leftAlias, rightAlias, start, end, mi);
+            const computed = runWindowMethod(method, dataset, leftAlias, rightAlias, start, end, mi, hsicOptions);
             rows.push({
               leftAlias,
               rightAlias,

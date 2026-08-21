@@ -101,7 +101,7 @@ describe('POST /api/tasks/:id/run + GET results', () => {
       .set('Cookie', cookie);
     expect(run.status).toBe(200);
     expect(run.body.status).toBe('completed');
-    expect(run.body.resultCount).toBe(4);
+    expect(run.body.resultCount).toBe(5);
     expect(run.body.auditCount).toBe(2);
     expect(run.body.llmStatus).toBe('skipped');
 
@@ -110,9 +110,9 @@ describe('POST /api/tasks/:id/run + GET results', () => {
       .set('Cookie', cookie);
     expect(results.status).toBe(200);
     expect(results.body.task.status).toBe('completed');
-    expect(results.body.results).toHaveLength(4);
+    expect(results.body.results).toHaveLength(5);
     const families = results.body.results.map((r: { test_family: string }) => r.test_family).sort();
-    expect(families).toEqual(['categorical', 'continuous', 'continuous', 'continuous']);
+    expect(families).toEqual(['categorical', 'continuous', 'continuous', 'continuous', 'continuous']);
     for (const r of results.body.results) {
       expect(r.window_end).toBeNull();
       expect(r.p_value_adjusted).toBeGreaterThanOrEqual(r.p_value_raw - 1e-12);
@@ -142,7 +142,7 @@ describe('POST /api/tasks/:id/run + GET results', () => {
     const results = await request(app)
       .get(`/api/tasks/${taskId}/results`)
       .set('Cookie', cookie);
-    expect(results.body.results).toHaveLength(4);
+    expect(results.body.results).toHaveLength(5);
     expect(results.body.audit).toHaveLength(2);
   }, 60_000);
 

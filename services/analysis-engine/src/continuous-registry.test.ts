@@ -1,7 +1,7 @@
 /**
  * T11 · 连续变量依赖检验可插拔注册表（RED 先行）。
  * PRD 模块 F：可插拔扩展接口，便于后续接入 HSIC 等核独立性检验。
- * 内置方法：pearson / spearman / mutual_information（副作用注册）。
+ * 内置方法：pearson / spearman / mutual_information / hsic（副作用注册）。
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -11,8 +11,9 @@ import {
 } from './continuous-registry.js';
 
 describe('continuous-registry · 插件式注册', () => {
-  it('内置三方法已注册', () => {
+  it('内置四方法已注册', () => {
     expect(listContinuousMethodNames().sort()).toEqual([
+      'hsic',
       'mutual_information',
       'pearson',
       'spearman',
@@ -22,7 +23,7 @@ describe('continuous-registry · 插件式注册', () => {
   it('内置方法输出统一 ContinuousDependencyResult 形态', () => {
     const x = [1, 2, 3, 4, 5, 6];
     const y = [2, 1, 4, 3, 6, 5];
-    for (const name of ['pearson', 'spearman', 'mutual_information'] as const) {
+    for (const name of ['pearson', 'spearman', 'mutual_information', 'hsic'] as const) {
       const result = getContinuousMethod(name).run(x, y);
       expect(result.testName).toBe(name);
       expect(typeof result.statValue).toBe('number');

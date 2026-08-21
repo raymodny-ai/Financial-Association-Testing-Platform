@@ -16,6 +16,7 @@ export * from './chi-square-dataset';
 export * from './student-t';
 export * from './correlation';
 export * from './mutual-information';
+export * from './hsic';
 export * from './continuous-registry';
 export * from './correction';
 export * from './rolling';

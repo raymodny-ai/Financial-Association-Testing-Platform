@@ -3,13 +3,14 @@
  *
  * 统一契约 ContinuousDependencyMethod：name + run(x, y) → 统一结果形态，
  * 与结果长表字段对齐（statValue / pValue / effectSize / notes）。
- * 内置 pearson / spearman / mutual_information（模块尾部副作用注册），
- * HSIC 等后续方法经 registerContinuousMethod 插入，无需改动调用方。
+ * 内置 pearson / spearman / mutual_information / hsic（模块尾部副作用注册），
+ * 后续方法经 registerContinuousMethod 插入，无需改动调用方。
  *
  * mutual_information 的置换检验默认参数：bins=3（PRD 三分默认）、
  * permutations=199、seed=0（确定性可复现）。
  */
 import { pearsonTest, spearmanTest } from './correlation.js';
+import { hsicTest } from './hsic.js';
 import { permutationMiTest } from './mutual-information.js';
 
 export interface ContinuousDependencyResult {
@@ -84,6 +85,20 @@ registerContinuousMethod({
       pValue: result.pValue,
       effectSize: null,
       notes: `等频 3 箱离散化 + 置换检验 B=${result.permutations}（seed=0）`,
+    };
+  },
+});
+
+registerContinuousMethod({
+  name: 'hsic',
+  run: (x, y) => {
+    const result = hsicTest(x, y, { permutations: 199, seed: 0 });
+    return {
+      testName: 'hsic',
+      statValue: result.hsic,
+      pValue: result.pValue,
+      effectSize: result.normalizedHsic,
+      notes: `高斯核（中位数带宽）+ 置换检验 B=${result.permutations}（seed=0），效应量为归一化 HSIC`,
     };
   },
 });

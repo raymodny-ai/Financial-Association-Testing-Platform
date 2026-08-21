@@ -22,9 +22,10 @@ analysis-engine: "services/analysis-engine/src" {
   student-t: "studentTSf(t, df)\ndf≤2 闭式解，df≥3 jstat"
   correlation: "pearsonTest(x,y) / spearmanTest(x,y)\n→ {r, statistic(t), degreesOfFreedom, pValue, n}"
   mutual-information: "mutualInformationFromCounts / estimateMutualInformation / permutationMiTest（mulberry32 播种）"
-  continuous-registry: "register/get/listContinuousMethod\n内置 pearson/spearman/mutual_information"
+  hsic: "hsicStatistic(x,y) / hsicTest(x,y,{permutations,seed})\n→ {hsic, normalizedHsic, pValue, permutations, n}：高斯核中位数带宽 + 迹展开式，H2"
+  continuous-registry: "register/get/listContinuousMethod\n内置 pearson/spearman/mutual_information/hsic"
   correction: "adjustPValues(pValues, method)\nbonferroni/bh/by/none，statsmodels 语义\ncorrectAndMark(pValues, method, alpha)\n→ {adjusted, significant}"
-  rolling: "planWindows(n, {windowSize, stepSize, minSamples})\nrollingWindowTests(dataset, options)\n→ {rows, skipped}：χ²/pearson/spearman/MI 滚动重算"
+  rolling: "planWindows(n, {windowSize, stepSize, minSamples})\nrollingWindowTests(dataset, options)\n→ {rows, skipped}：χ²/pearson/spearman/MI 默认四法 + hsic 可选扩展法滚动重算"
   audit: "auditSeries({alias, points, thresholds, adjustedPoints?, dualSource?})\n→ {row(auditRow 9字段), notes[], homogeneity|null}\n跳点=阈值主规则+MAD 兜底；双源=三分箱一致率+同质性 χ²"
   llm-context: "buildLlmContext({config, researchQuestion?, results, rollingSkippedCount?, audit, auditNotes?})\n→ LlmContext（llmContextSchema 校验）\n行分区：window_end 非空=滚动、lag>0=滞后、其余=全样本"
   types: "NumericSeries / AlignedPanel"
@@ -38,9 +39,11 @@ analysis-engine: "services/analysis-engine/src" {
   mutual-information -> binning
   continuous-registry -> correlation
   continuous-registry -> mutual-information
+  continuous-registry -> hsic
   rolling -> chi-square-dataset: "countContingency / pruneZeroMargins 共享接缝"
   rolling -> correlation
   rolling -> mutual-information
+  rolling -> hsic
   audit -> chi-square: "双源同质性 chiSquareHomogeneity"
   audit -> binning: "quantileLinear 三分箱阈值"
 }
@@ -70,7 +73,7 @@ api-data-flow: "services/api 数据链路" {
 }
 
 api-analysis-flow: "services/api 任务运行编排（T17-A）" {
-  runner: "runAnalysis(config, deps) → AnalysisOutcome{runId, results, audit, llm}\n数据加载 → prepareDataset → 卡方族+连续三法 → 校正分批 → 滚动 → 每源审计 → buildLlmContext → interpret"
+  runner: "runAnalysis(config, deps) → AnalysisOutcome{runId, results, audit, llm}\n数据加载 → prepareDataset → 卡方族+注册表连续法（四法含 hsic） → 校正分批 → 滚动 → 每源审计 → buildLlmContext → interpret"
   deps: "RunnerDeps DI：fetchHistory / readFileContent（工作区作用域）/ interpret"
   repos: "resultRepository/auditRepository.replaceForTask（同事务 DELETE+INSERT）\nllmArtifactRepository.save（ON CONFLICT(task_id)）"
   routes: "POST /tasks/:id/run（running→409，失败回写 failed）\nGET /tasks/:id/results（task+results+audit+llm）"

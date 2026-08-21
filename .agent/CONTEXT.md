@@ -21,10 +21,11 @@
 | studentTSf | t 分布生存函数，相关系数 p 值通道；df≤2 用解析闭式解（jstat 精度不足），df≥3 走 jstat。 |
 | 平均秩（ranksWithTies） | Spearman 秩变换：并列值取秩均值，Spearman = 秩上的 Pearson。 |
 | 互信息（MI） | 定义式 Σ p(x,y)ln(p(x,y)/(p(x)p(y)))，自然对数；连续变量经等频分箱后估计；置换检验 p=(≥观测次数+1)/(B+1)，播种 mulberry32 可复现。 |
-| 连续检验可插拔注册表 | ContinuousDependencyMethod 契约（name + run(x,y)），内置 pearson/spearman/mutual_information，HSIC 等后续插入无需改调用方。 |
+| HSIC（H2） | 核独立性检验（Gretton 2005）：有偏统计量 tr(KHLH)/(n−1)²，高斯 RBF 核 + 中位数带宽；计算走迹展开式免构造 H；置换检验播种 mulberry32，归一化 HSIC 作效应量；全样本内置（B=199），滚动层可选扩展法（B=99，不入默认四法）。 |
+| 连续检验可插拔注册表 | ContinuousDependencyMethod 契约（name + run(x,y)），内置 pearson/spearman/mutual_information/hsic（H2 接入），后续插入无需改调用方。 |
 | 多重检验校正（adjustPValues） | PRD 模块 I：bonferroni=min(p·m,1)；bh step-up 累积最小；by 乘 c(m)=调和数；语义对齐 statsmodels multipletests，按值而非位置校正。 |
 | correctAndMark | 校正+显著性成对产出接缝：adjusted 写 p_value_adjusted，significant = adjusted < alpha（与 result.ts 契约同口径）。 |
-| 滚动窗口调度（planWindows） | 检验期内按观测数（日频即交易日数）滑动：起点按步长推进，末端钳制到检验期尾，长度 ≥ minSamples（默认 windowSize）才保留。minSamples/methods（四法子集）经 rollingConfigSchema 可选字段透传（G5，refine 约束 minSamples≤windowDays），前端向导检验选项步可配（缺省交给引擎默认）。 |
+| 滚动窗口调度（planWindows） | 检验期内按观测数（日频即交易日数）滑动：起点按步长推进，末端钳制到检验期尾，长度 ≥ minSamples（默认 windowSize）才保留。minSamples/methods（默认四法子集，hsic 可选扩展）经 rollingConfigSchema 可选字段透传（G5，refine 约束 minSamples≤windowDays），前端向导检验选项步可配（缺省交给引擎默认）。 |
 | 退化窗口（skipped） | 窗口内零方差/剪枝后不足 2×2/零跨度等前提不满足时不产出结果行，原因记入 skipped（PRD：警告而非静默）。 |
 | 审计（auditSeries） | PRD 模块 J 六类：缺失值/重复索引/缺失交易日（日期索引存在性口径）/stale run（≥3 同值）/跳点（阈值主规则，零命中降级 MAD 兜底）/复权差异；输出 auditRow 9 字段 + notes + 双源同质性。 |
 | 双源一致率 | 主序列等频三分箱阈值对两源共享日期分箱，状态相同占比；同质性走 chiSquareHomogeneity；单源为 1。 |
@@ -68,7 +69,7 @@
 ## 已定案（速查）
 
 - ADR 001：MVP 不引入 Python；jstat 仅分布函数 + TS 自实现统计；Yahoo chart API 主力源（修订 1，Stooq 休眠保留）+ CSV 并列第一入口；适配器 ≥1s 限速 + 24h 缓存。
-- ADR 002（G14，V1 扩展预留）：HSIC 核独立性检验接入点 = analysis-engine 连续检验注册表 `registerContinuousMethod`（T11 已有 mock_hsic 插件注册测试证明可扩展）；接入时另需扩展 rollingMethodSchema/连续检验枚举。PRD 七层服务的 audit-engine/llm-service 已以 api 内 domain 模块形态落地；report-service（15_full_report.html）当前由前端 export-report.ts 浏览器端生成，V1 如需服务端渲染再抽独立服务，MVP 不拆微服务（与同源单服务部署约束一致）。
+- ADR 002（G14，V1 扩展预留；HSIC 部分已于 H2 落地）：HSIC 核独立性检验接入点 = analysis-engine 连续检验注册表 `registerContinuousMethod`（H2 已内置 hsic：hsic.ts 黄金基准实现 + 全样本自动生效 + 滚动层 ROLLING_EXTRA_METHODS 可选扩展 + rollingMethodSchema 枚举扩展，编排层零改动，印证可扩展性）；其余预留项不变。PRD 七层服务的 audit-engine/llm-service 已以 api 内 domain 模块形态落地；report-service（15_full_report.html）当前由前端 export-report.ts 浏览器端生成，V1 如需服务端渲染再抽独立服务，MVP 不拆微服务（与同源单服务部署约束一致）。
 - 数据访问：node-postgres（pg）+ 手写 SQL 迁移，不用 ORM。
 - ADR 003（G17，N11 定案）：交易日对齐以数据源实际日期为真值（对齐层按日期内连接，节假日自然剔除，不做插值）；周一至周五近似仅影响审计注记的「缺失工作日数」口径（audit.ts），不影响任何统计结果，MVP 不接交易所节假日日历。V1 如需精确口径，可引入纯前端节假日库（如 @date-holidays）仅替换 audit 的工作日计数，引擎无感。
 - 统计/审计引擎代码：严格 TDD（RED→GREEN→REFACTOR），先写黄金基准对拍测试。

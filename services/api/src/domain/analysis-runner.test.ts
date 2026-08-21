@@ -105,7 +105,7 @@ function fakeDeps(overrides?: Partial<RunnerDeps>): {
 }
 
 describe('runAnalysis · 全链路（注入 fake 依赖）', () => {
-  it('产出分类 1 组 + 连续 3 法 + 滚动行，run_id 一致', async () => {
+  it('产出分类 1 组 + 连续 4 法（含 hsic，H2）+ 滚动行，run_id 一致', async () => {
     const { deps } = fakeDeps();
     const outcome = await runAnalysis(baseConfig, deps);
     expect(outcome.runId).toMatch(/^[0-9a-f-]{36}$/);
@@ -116,6 +116,7 @@ describe('runAnalysis · 全链路（注入 fake 依赖）', () => {
     expect(categorical).toHaveLength(1); // 两别名 → 1 对
     expect(categorical[0]!.test_name).toBe('chi_square_independence');
     expect(continuous.map((r) => r.test_name).sort()).toEqual([
+      'hsic',
       'mutual_information',
       'pearson',
       'spearman',
@@ -224,7 +225,7 @@ describe('runAnalysis · 全链路（注入 fake 依赖）', () => {
     // 未配置双源的 B 保持单源语义（一致率 1）
     expect(outcome.audit.find((a) => a.series_alias === 'B')!.source_match_ratio).toBe(1);
     // 第二源仅供审计对账，不得产出分析行
-    expect(outcome.results.length).toBe(4); // 1 分类 + 3 连续（与无双源基线一致）
+    expect(outcome.results.length).toBe(5); // 1 分类 + 4 连续（含 hsic，与无双源基线一致）
     // 双源发现传导至 LLM 上下文
     expect(interpretCalls[0]!.context.audit_key_findings).toContain('双源一致率');
   });
