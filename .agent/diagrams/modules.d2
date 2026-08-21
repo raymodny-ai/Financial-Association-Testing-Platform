@@ -8,8 +8,8 @@ packages: {
 
 services: {
   api: "services/api\nExpress 5 网关" {
-    presentation: "routes(tasks 含 run/results、files、templates 保存/列表/删除) + middleware(workspace/error-handler/security：helmet+限流+CORS+请求ID+UUID防护) + static(T20 同源托管 web 产物 + SPA 回退，WEB_DIST_DIR 可关)"
-    domain: "DataProvider 契约 + provider-registry + analysis-runner 任务运行编排 + prompt-renderer + llm-service 编排"
+    presentation: "routes(tasks 含 run(202 异步)/progress/results、files、templates 保存/列表/删除) + middleware(workspace/error-handler/security：helmet+限流+CORS+请求ID+UUID防护) + static(T20 同源托管 web 产物 + SPA 回退，WEB_DIST_DIR 可关)"
+    domain: "DataProvider 契约 + provider-registry + analysis-runner 任务运行编排 + prompt-renderer + llm-service 编排 + run-progress 运行进度注册表（P2）"
     infrastructure: "adapters(yahoo/stooq/csv-parse/llm-http) + repositories(task/file/result+panel/llm_artifacts/template) + migrate/db + llm-config/prompt-assets/llm-runner + logger(JSON 行结构化日志) + rolling-pool/rolling-worker(worker_threads 滚动并行池，P1)"
   }
   analysis-engine: "services/analysis-engine\n纯函数分析引擎" {
@@ -37,7 +37,7 @@ services: {
 apps: {
   web: "apps/web\nReact + Vite + AntD\nG7 路由懒加载 + vendor 分割" {
     home: "HomePage 新建分析向导（五步 Steps，safeParse 校验；G6 模板条载入/删除 + 保存为模板 + /?clone 预填；G11 派生序列编辑器；G12 CSV 第二文件双源审计；G13 研究问题）"
-    results: "ResultsPage 三栏结果页（.layout-results + 风险固定条 + 七 Tab：分类/连续/滚动/滞后/审计/LLM/原始导出 + 导出）"
+    results: "ResultsPage 三栏结果页（.layout-results + 风险固定条 + 七 Tab：分类/连续/滚动/滞后/审计/LLM/原始导出 + 导出；P2/X1 运行中进度条轮询与失败重试）"
     lag-chart: "LagCurveChart 零依赖 SVG 滞后曲线图（与表格双视图，PRD 模块 H）"
     history: "HistoryPage 任务列表（状态标签 + 重跑 + 复制分析）"
     lib: "lib/api.ts fetch 封装（credentials:'include' + Zod 出参校验，含 panel 快照） + lib/export.ts 下载原语 + lib/export-report.ts 01~15 编号导出生成器"

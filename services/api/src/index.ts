@@ -5,6 +5,7 @@
  */
 import { createApp } from './app.js';
 import { createLogger } from './infrastructure/logger.js';
+import { taskRepository } from './infrastructure/repositories/task-repository.js';
 
 const logger = createLogger();
 
@@ -24,6 +25,14 @@ const app = createApp({
   },
 });
 
-app.listen(port, '0.0.0.0', () => {
+app.listen(port, '0.0.0.0', async () => {
   logger.info('listening', { host: '0.0.0.0', port });
+  // P2 启动清扫：上次运行被重启中断的任务置 failed（可重试），避免永久卡在 running；
+  // 清扫失败仅记日志不阻塞服务启动（数据库不可用时请求链路自然报错）
+  try {
+    const recovered = await taskRepository.recoverInterrupted();
+    if (recovered > 0) logger.info('recovered-interrupted-tasks', { count: recovered });
+  } catch (error) {
+    logger.error('recover-interrupted-tasks-failed', { error: error as Error });
+  }
 });

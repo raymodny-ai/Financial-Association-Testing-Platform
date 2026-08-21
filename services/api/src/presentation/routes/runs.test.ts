@@ -1,6 +1,7 @@
 /**
  * T17 验收：任务运行编排端到端（集成测试，依赖本地 PostgreSQL）。
- * POST /api/tasks/:id/run → 全链路分析 → GET /api/tasks/:id/results。
+ * P2：POST /api/tasks/:id/run → 202 后台异步执行 → 轮询任务状态 → GET results；
+ * 运行中重复提交 409；GET /:id/progress 返回步骤进度（终态后清空）。
  * 使用测试内注册的 mock provider（不触外部行情源）；LLM 密钥 stub 空 → skipped 降级。
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -10,6 +11,7 @@ import { pool } from '../../infrastructure/db.js';
 import { runMigrations } from '../../infrastructure/migrate.js';
 import { registerProvider } from '../../domain/provider-registry.js';
 import type { DataProvider, HistoryPanel, PanelPoint } from '../../domain/data-provider.js';
+import { taskRepository } from '../../infrastructure/repositories/task-repository.js';
 import { WORKSPACE_COOKIE } from '../middleware/workspace.js';
 
 /** 确定性面板：工作日、温和波动（与 analysis-runner.test 同构造） */
@@ -50,6 +52,15 @@ const mockProvider: DataProvider = {
   },
 };
 
+/** 慢速 provider（P2：拉长运行窗口，稳定验证运行中 409 与进度可见性） */
+const slowProvider: DataProvider = {
+  name: 'slowmock',
+  async fetchHistory(ticker) {
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    return makePanel(ticker, ticker.length);
+  },
+};
+
 const runConfig = {
   projectName: 'T17 运行冒烟',
   dataSources: [
@@ -75,11 +86,29 @@ function cookieOf(res: request.Response): string {
   return list.find((c) => c.startsWith(`${WORKSPACE_COOKIE}=`))!.split(';')[0]!;
 }
 
+/** P2：轮询任务状态至终态（completed/failed），返回终态行 */
+async function waitForCompletion(
+  app: ReturnType<typeof createApp>,
+  cookie: string,
+  taskId: string,
+  timeoutMs = 30_000,
+): Promise<{ status: string; errorMessage: string | null }> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const res = await request(app).get(`/api/tasks/${taskId}`).set('Cookie', cookie);
+    expect(res.status).toBe(200);
+    if (res.body.status === 'completed' || res.body.status === 'failed') return res.body;
+    if (Date.now() > deadline) throw new Error(`任务 ${taskId} 未在 ${timeoutMs}ms 内到达终态`);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+}
+
 beforeAll(async () => {
   // 防止测试环境意外携带真实密钥触发网络调用
   vi.stubEnv('DASHSCOPE_API_KEY', '');
   vi.stubEnv('DEEPSEEK_API_KEY', '');
   registerProvider(mockProvider);
+  registerProvider(slowProvider);
   await runMigrations(pool);
 });
 
@@ -88,8 +117,8 @@ afterAll(async () => {
   await pool.end();
 });
 
-describe('POST /api/tasks/:id/run + GET results', () => {
-  it('全链路：completed → 结果 4 行（1 分类 + 3 连续）+ 审计 2 行 + LLM skipped', async () => {
+describe('POST /api/tasks/:id/run（P2 异步）+ GET results', () => {
+  it('全链路：202 受理 → 轮询 completed → 结果 7 行 + 审计 2 行 + LLM skipped', async () => {
     const app = createApp();
     const created = await request(app).post('/api/tasks').send(runConfig);
     expect(created.status).toBe(201);
@@ -99,11 +128,12 @@ describe('POST /api/tasks/:id/run + GET results', () => {
     const run = await request(app)
       .post(`/api/tasks/${taskId}/run`)
       .set('Cookie', cookie);
-    expect(run.status).toBe(200);
-    expect(run.body.status).toBe('completed');
-    expect(run.body.resultCount).toBe(7);
-    expect(run.body.auditCount).toBe(2);
-    expect(run.body.llmStatus).toBe('skipped');
+    expect(run.status).toBe(202);
+    expect(run.body.status).toBe('running');
+
+    const final = await waitForCompletion(app, cookie, taskId);
+    expect(final.status).toBe('completed');
+    expect(final.errorMessage).toBeNull();
 
     const results = await request(app)
       .get(`/api/tasks/${taskId}/results`)
@@ -145,7 +175,9 @@ describe('POST /api/tasks/:id/run + GET results', () => {
     const taskId = created.body.id as string;
 
     await request(app).post(`/api/tasks/${taskId}/run`).set('Cookie', cookie);
+    await waitForCompletion(app, cookie, taskId);
     await request(app).post(`/api/tasks/${taskId}/run`).set('Cookie', cookie);
+    await waitForCompletion(app, cookie, taskId);
 
     const results = await request(app)
       .get(`/api/tasks/${taskId}/results`)
@@ -153,6 +185,69 @@ describe('POST /api/tasks/:id/run + GET results', () => {
     expect(results.body.results).toHaveLength(7);
     expect(results.body.audit).toHaveLength(2);
   }, 60_000);
+
+  it('运行中重复提交 409 + progress 进度可见（终态后清空）', async () => {
+    const slowConfig = {
+      ...runConfig,
+      dataSources: [
+        { kind: 'ticker', alias: 'A', ticker: 'AAA', provider: 'slowmock' },
+        { kind: 'ticker', alias: 'B', ticker: 'BBB', provider: 'slowmock' },
+      ],
+    };
+    const app = createApp();
+    const created = await request(app).post('/api/tasks').send(slowConfig);
+    const cookie = cookieOf(created);
+    const taskId = created.body.id as string;
+
+    const run = await request(app).post(`/api/tasks/${taskId}/run`).set('Cookie', cookie);
+    expect(run.status).toBe(202);
+
+    // 慢速 provider 保证此时仍在运行：重复提交 409，进度可见（11 步标签表）
+    const again = await request(app).post(`/api/tasks/${taskId}/run`).set('Cookie', cookie);
+    expect(again.status).toBe(409);
+
+    const progress = await request(app)
+      .get(`/api/tasks/${taskId}/progress`)
+      .set('Cookie', cookie);
+    expect(progress.status).toBe(200);
+    expect(progress.body.status).toBe('running');
+    expect(progress.body.progress).not.toBeNull();
+    expect(progress.body.progress.totalSteps).toBe(11);
+    expect(progress.body.progress.stepIndex).toBeGreaterThanOrEqual(0);
+    expect(typeof progress.body.progress.stepLabel).toBe('string');
+
+    const final = await waitForCompletion(app, cookie, taskId);
+    expect(final.status).toBe('completed');
+
+    // 终态后进度清空（不残留），状态照常返回
+    const after = await request(app)
+      .get(`/api/tasks/${taskId}/progress`)
+      .set('Cookie', cookie);
+    expect(after.status).toBe(200);
+    expect(after.body.status).toBe('completed');
+    expect(after.body.progress).toBeNull();
+  }, 30_000);
+
+  it('失败任务回写 failed 与错误信息（供前端重试提示）', async () => {
+    const badConfig = {
+      ...runConfig,
+      dataSources: [
+        { kind: 'ticker', alias: 'A', ticker: 'AAA', provider: 'mock' },
+        { kind: 'ticker', alias: 'B', ticker: 'BBB', provider: '不存在的提供方' },
+      ],
+    };
+    const app = createApp();
+    const created = await request(app).post('/api/tasks').send(badConfig);
+    const cookie = cookieOf(created);
+    const taskId = created.body.id as string;
+
+    const run = await request(app).post(`/api/tasks/${taskId}/run`).set('Cookie', cookie);
+    expect(run.status).toBe(202);
+
+    const final = await waitForCompletion(app, cookie, taskId);
+    expect(final.status).toBe('failed');
+    expect(final.errorMessage).toContain('不存在的提供方');
+  }, 30_000);
 
   it('未知任务运行返回 404（G5 归属作用域）', async () => {
     const app = createApp();
@@ -162,5 +257,26 @@ describe('POST /api/tasks/:id/run + GET results', () => {
       .post('/api/tasks/00000000-0000-0000-0000-0000000000ff/run')
       .set('Cookie', cookie);
     expect(res.status).toBe(404);
+    const progress = await request(app)
+      .get('/api/tasks/00000000-0000-0000-0000-0000000000ff/progress')
+      .set('Cookie', cookie);
+    expect(progress.status).toBe(404);
+  });
+});
+
+describe('启动清扫（P2：服务重启中断的运行中任务）', () => {
+  it('recoverInterrupted：running 卡死任务置 failed 并注明可重试', async () => {
+    const app = createApp();
+    const created = await request(app).post('/api/tasks').send(runConfig);
+    const cookie = cookieOf(created);
+    const taskId = created.body.id as string;
+    await taskRepository.updateStatus(taskId, 'running', null);
+
+    const recovered = await taskRepository.recoverInterrupted();
+    expect(recovered).toBeGreaterThanOrEqual(1);
+
+    const single = await request(app).get(`/api/tasks/${taskId}`).set('Cookie', cookie);
+    expect(single.body.status).toBe('failed');
+    expect(single.body.errorMessage).toContain('中断');
   });
 });

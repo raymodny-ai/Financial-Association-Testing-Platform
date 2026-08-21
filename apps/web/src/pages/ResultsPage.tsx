@@ -1,10 +1,10 @@
 import { useMemo } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { Alert, Card, Empty, Spin, Table, Tabs, Tag, Typography } from 'antd';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Alert, Button, Card, Empty, Progress, Spin, Table, Tabs, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { AuditRow, LlmOutput, ResultRow } from '@platform/schemas';
-import { getTaskResults } from '../lib/api';
+import { getTaskProgress, getTaskResults, runTask } from '../lib/api';
 import LagCurveChart from '../components/LagCurveChart';
 import ExportPanel from '../components/ExportPanel';
 
@@ -70,9 +70,32 @@ export default function ResultsPage() {
     queryKey: ['task-results', taskId],
     queryFn: () => getTaskResults(taskId as string),
     enabled: taskId !== undefined,
+    // P2/X1：运行中每 2s 轮询，到达终态自动停止并刷新结果
+    refetchInterval: (q) => {
+      const status = q.state.data?.task.status;
+      return status === 'running' || status === 'queued' ? 2000 : false;
+    },
   });
 
   const data = query.data;
+  const taskStatus = data?.task.status;
+
+  // 进度轮询（仅运行中）：当前步骤 + 总步数驱动进度条；终态后服务端清空自动停轮询条件不再成立
+  const progressQuery = useQuery({
+    queryKey: ['task-progress', taskId],
+    queryFn: () => getTaskProgress(taskId as string),
+    enabled: taskId !== undefined && taskStatus === 'running',
+    refetchInterval: 1000,
+  });
+
+  // 失败重试（PRD：运行中状态展示含失败重试）：重新提交后回到运行中轮询
+  const queryClient = useQueryClient();
+  const retry = useMutation({
+    mutationFn: () => runTask(taskId as string),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['task-results', taskId] });
+    },
+  });
 
   const partitions = useMemo(() => {
     const results = data?.results ?? [];
@@ -112,6 +135,51 @@ export default function ResultsPage() {
           showIcon
           message="结果加载失败"
           description={query.error instanceof Error ? query.error.message : '未知错误'}
+        />
+      </Card>
+    );
+  }
+
+  // P2/X1：运行中/排队中 —— 进度条 + 当前步骤（异步轮询，PRD L137/L556）
+  if (taskStatus === 'running' || taskStatus === 'queued') {
+    const progress = taskStatus === 'running' ? (progressQuery.data?.progress ?? null) : null;
+    const percent =
+      progress !== null ? Math.round(((progress.stepIndex + 1) / progress.totalSteps) * 100) : 0;
+    return (
+      <Card>
+        <Typography.Title level={3} className="font-display">
+          分析运行中
+        </Typography.Title>
+        {taskStatus === 'queued' ? (
+          <Spin tip="排队等待执行…" />
+        ) : progress !== null ? (
+          <div className="run-progress">
+            <Progress percent={percent} status="active" />
+            <p className="field-hint">
+              第 {progress.stepIndex + 1} / {progress.totalSteps} 步 · {progress.stepLabel}
+            </p>
+          </div>
+        ) : (
+          <Spin tip="运行中，等待进度上报…" />
+        )}
+      </Card>
+    );
+  }
+
+  // 失败：错误信息 + 一键重试（错误文案含启动清扫的中断说明）
+  if (data.task.status === 'failed') {
+    return (
+      <Card>
+        <Alert
+          type="error"
+          showIcon
+          message="分析执行失败"
+          description={data.task.errorMessage ?? '未知错误'}
+          action={
+            <Button type="primary" loading={retry.isPending} onClick={() => retry.mutate()}>
+              重新运行
+            </Button>
+          }
         />
       </Card>
     );

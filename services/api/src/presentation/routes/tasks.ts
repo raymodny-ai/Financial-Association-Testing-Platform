@@ -3,7 +3,8 @@
  * POST /api/tasks   —— 创建任务（入参经 createTaskRequestSchema 校验）
  * GET  /api/tasks   —— 列出当前工作区任务
  * GET  /api/tasks/:id —— 查询单任务（归属校验，跨工作区视同不存在）
- * POST /api/tasks/:id/run —— 同步执行全链路分析（T17：MVP 同步编排）
+ * POST /api/tasks/:id/run —— 202 受理后台异步执行（P2：长任务异步化，前端轮询）
+ * GET  /api/tasks/:id/progress —— 运行进度（当前步骤/总步数，终态后清空）
  * GET  /api/tasks/:id/results —— 结果长表 + 审计表 + LLM 产物
  */
 import { randomUUID } from 'node:crypto';
@@ -18,6 +19,12 @@ import { AppError, DataAdapterError, NotFoundError } from '@platform/shared';
 import { assertUuidParam } from '../middleware/security.js';
 import { runAnalysis, type RunnerDeps } from '../../domain/analysis-runner.js';
 import { getProvider } from '../../domain/provider-registry.js';
+import {
+  RUN_STEPS,
+  clearRunProgress,
+  getRunProgress,
+  reportProgress,
+} from '../../domain/run-progress.js';
 import { interpretContext } from '../../infrastructure/llm-runner.js';
 import { createParallelRollingExecutor } from '../../infrastructure/rolling-pool.js';
 import { fileRepository } from '../../infrastructure/repositories/file-repository.js';
@@ -97,6 +104,35 @@ function makeRunnerDeps(workspaceId: string): RunnerDeps {
   };
 }
 
+/**
+ * P2：后台执行全链路分析并持久化（不阻塞请求；失败回写 failed）。
+ * 进度上报：编排 0..9 步经 onProgress，持久化步（10）在本函数内上报，终态后清空。
+ */
+async function executeInBackground(taskId: string, config: TaskRecord['config'], workspaceId: string): Promise<void> {
+  try {
+    const outcome = await runAnalysis(config, makeRunnerDeps(workspaceId), (stepIndex) =>
+      reportProgress(taskId, stepIndex),
+    );
+    reportProgress(taskId, RUN_STEPS.length - 1); // 结果持久化（路由层职责）
+    await resultRepository.replaceForTask(taskId, outcome.results);
+    await auditRepository.replaceForTask(taskId, outcome.runId, outcome.audit);
+    await panelRepository.save(taskId, outcome.panel);
+    await llmArtifactRepository.save({
+      taskId,
+      runId: outcome.runId,
+      context: outcome.llm.context,
+      output: outcome.llm.output,
+      trace: outcome.llm.trace,
+    });
+    await taskRepository.updateStatus(taskId, 'completed', null);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await taskRepository.updateStatus(taskId, 'failed', message);
+  } finally {
+    clearRunProgress(taskId);
+  }
+}
+
 tasksRouter.post('/:id/run', async (req, res) => {
   const workspaceId = requireWorkspace(req);
   assertUuidParam(req.params.id);
@@ -105,31 +141,17 @@ tasksRouter.post('/:id/run', async (req, res) => {
   if (row.status === 'running') throw new AppError(409, '任务正在运行，请等待完成');
 
   await taskRepository.updateStatus(row.id, 'running', null);
-  try {
-    const outcome = await runAnalysis(row.config, makeRunnerDeps(workspaceId));
-    await resultRepository.replaceForTask(row.id, outcome.results);
-    await auditRepository.replaceForTask(row.id, outcome.runId, outcome.audit);
-    await panelRepository.save(row.id, outcome.panel);
-    await llmArtifactRepository.save({
-      taskId: row.id,
-      runId: outcome.runId,
-      context: outcome.llm.context,
-      output: outcome.llm.output,
-      trace: outcome.llm.trace,
-    });
-    await taskRepository.updateStatus(row.id, 'completed', null);
-    res.json({
-      status: 'completed',
-      runId: outcome.runId,
-      resultCount: outcome.results.length,
-      auditCount: outcome.audit.length,
-      llmStatus: outcome.llm.trace.status,
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    await taskRepository.updateStatus(row.id, 'failed', message);
-    throw error instanceof AppError ? error : new AppError(500, `分析执行失败：${message}`);
-  }
+  // P2：202 受理即返回，后台异步执行（PRD：长任务异步轮询）；失败状态由轮询可见
+  void executeInBackground(row.id, row.config, workspaceId);
+  res.status(202).json({ status: 'running' });
+});
+
+tasksRouter.get('/:id/progress', async (req, res) => {
+  const workspaceId = requireWorkspace(req);
+  assertUuidParam(req.params.id);
+  const row = await taskRepository.findByIdScoped(req.params.id, workspaceId);
+  if (!row) throw new NotFoundError('任务不存在');
+  res.json({ status: row.status, progress: getRunProgress(row.id) });
 });
 
 tasksRouter.get('/:id/results', async (req, res) => {

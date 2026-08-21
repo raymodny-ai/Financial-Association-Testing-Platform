@@ -82,26 +82,49 @@ export function getTask(taskId: string): Promise<TaskRecord> {
   return request<unknown>(`/tasks/${taskId}`).then((raw) => taskRecordSchema.parse(raw));
 }
 
-export interface TaskRunOutcome {
-  status: string;
-  runId: string;
-  resultCount: number;
-  auditCount: number;
-  llmStatus: LlmTrace['status'];
+export interface TaskRunAccepted {
+  /** P2：202 受理即返回，后台异步执行，状态经轮询可见 */
+  status: 'running';
 }
 
-const runOutcomeSchema = z.object({
-  status: z.string(),
-  runId: z.string().uuid(),
-  resultCount: z.number().int().min(0),
-  auditCount: z.number().int().min(0),
-  llmStatus: z.enum(['success', 'timeout', 'failed', 'skipped']),
+const runAcceptedSchema = z.object({
+  status: z.literal('running'),
 });
 
-/** 同步执行全链路分析（MVP：长耗时请求，由调用方展示运行中状态） */
-export function runTask(taskId: string): Promise<TaskRunOutcome> {
+/** 提交运行（异步：202 受理即返回，结果经任务状态/进度轮询获取，P2） */
+export function runTask(taskId: string): Promise<TaskRunAccepted> {
   return request<unknown>(`/tasks/${taskId}/run`, { method: 'POST' }).then((raw) =>
-    runOutcomeSchema.parse(raw),
+    runAcceptedSchema.parse(raw),
+  );
+}
+
+export interface TaskProgressSnapshot {
+  status: TaskRecord['status'];
+  /** 运行中才有值；终态后服务端清空为 null */
+  progress: {
+    stepIndex: number;
+    totalSteps: number;
+    stepLabel: string;
+    updatedAt: number;
+  } | null;
+}
+
+const taskProgressSchema = z.object({
+  status: taskRecordSchema.shape.status,
+  progress: z
+    .object({
+      stepIndex: z.number().int().min(0),
+      totalSteps: z.number().int().min(1),
+      stepLabel: z.string(),
+      updatedAt: z.number(),
+    })
+    .nullable(),
+});
+
+/** 运行进度轮询（P2/X1：当前步骤 + 总步数，驱动进度条） */
+export function getTaskProgress(taskId: string): Promise<TaskProgressSnapshot> {
+  return request<unknown>(`/tasks/${taskId}/progress`).then((raw) =>
+    taskProgressSchema.parse(raw),
   );
 }
 

@@ -59,4 +59,19 @@ export const taskRepository = {
       [id, status, errorMessage],
     );
   },
+
+  /**
+   * P2 启动清扫：服务重启后运行中任务不可能继续，置 failed 并注明可重试，
+   * 避免任务永久卡在 running（PRD：失败重试）；返回受影响行数。
+   */
+  async recoverInterrupted(): Promise<number> {
+    const result = await pool.query(
+      `UPDATE tasks
+       SET status = 'failed',
+           error_message = '服务重启中断了本次运行，请重新运行',
+           updated_at = now()
+       WHERE status = 'running'`,
+    );
+    return result.rowCount ?? 0;
+  },
 };

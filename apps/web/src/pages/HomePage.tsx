@@ -412,10 +412,11 @@ export default function HomePage() {
     try {
       const task = await createTask(parsed.data);
       await runTask(task.id);
-      message.success('分析完成，正在打开结果页');
+      // P2：202 受理即异步执行，进度与结果在结果页轮询展示（X1）
+      message.info('分析已启动，正在跳转结果页跟踪进度');
       navigate(`/results/${task.id}`);
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : '运行失败');
+      setSubmitError(error instanceof Error ? error.message : '启动失败');
     } finally {
       setSubmitting(false);
     }

@@ -81,6 +81,26 @@ function cookieOf(res: request.Response): string {
   return list.find((c) => c.startsWith(`${WORKSPACE_COOKIE}=`))!.split(';')[0]!;
 }
 
+/** P2：run 转异步后轮询至终态（202 受理 → completed/failed） */
+async function runAndWait(
+  app: ReturnType<typeof createApp>,
+  cookie: string,
+  taskId: string,
+): Promise<void> {
+  const run = await request(app).post(`/api/tasks/${taskId}/run`).set('Cookie', cookie);
+  expect(run.status).toBe(202);
+  const deadline = Date.now() + 30_000;
+  for (;;) {
+    const res = await request(app).get(`/api/tasks/${taskId}`).set('Cookie', cookie);
+    if (res.body.status === 'completed' || res.body.status === 'failed') {
+      expect(res.body.status).toBe('completed');
+      return;
+    }
+    if (Date.now() > deadline) throw new Error(`任务 ${taskId} 未在 30s 内完成`);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+}
+
 beforeAll(async () => {
   vi.stubEnv('DASHSCOPE_API_KEY', '');
   vi.stubEnv('DEEPSEEK_API_KEY', '');
@@ -109,11 +129,7 @@ describe('审计注入：ticker 源', () => {
     const cookie = cookieOf(created);
     const taskId = created.body.id as string;
 
-    const run = await request(app)
-      .post(`/api/tasks/${taskId}/run`)
-      .set('Cookie', cookie);
-    expect(run.status).toBe(200);
-    expect(run.body.status).toBe('completed');
+    await runAndWait(app, cookie, taskId);
 
     const results = await request(app)
       .get(`/api/tasks/${taskId}/results`)
@@ -190,11 +206,7 @@ describe('审计注入：CSV 上传链路', () => {
     expect(created.status).toBe(201);
     const taskId = created.body.id as string;
 
-    const run = await request(app)
-      .post(`/api/tasks/${taskId}/run`)
-      .set('Cookie', cookie);
-    expect(run.status).toBe(200);
-    expect(run.body.status).toBe('completed');
+    await runAndWait(app, cookie, taskId);
 
     const results = await request(app)
       .get(`/api/tasks/${taskId}/results`)

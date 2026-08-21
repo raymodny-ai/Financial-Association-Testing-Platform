@@ -72,6 +72,14 @@
   margin-top: var(--space-1);
 }
 
+/* 运行进度区（P2/X1：进度条 + 当前步骤文案） */
+.run-progress {
+  max-width: 32rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
 /* 检验选项步方法说明（X3）：跨满表单网格，双列紧凑列表 */
 .method-guide {
   grid-column: 1 / -1;

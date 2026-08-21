@@ -75,21 +75,24 @@ api-data-flow: "services/api 数据链路" {
 }
 
 api-analysis-flow: "services/api 任务运行编排（T17-A）" {
-  runner: "runAnalysis(config, deps) → AnalysisOutcome{runId, results, audit, llm}\n数据加载 → prepareDataset → 卡方族+注册表连续法（四法含 hsic） → 校正分批 → 滚动 → 每源审计 → buildLlmContext → interpret"
+  runner: "runAnalysis(config, deps, onProgress?) → AnalysisOutcome{runId, results, audit, llm}\n数据加载 → prepareDataset → 卡方族+注册表连续法（四法含 hsic） → 校正分批 → 滚动 → 每源审计 → buildLlmContext → interpret\nP2：onProgress 上报编排 10 步（0..9）"
+  run-progress: "RUN_STEPS 11 步标签 + reportProgress / getRunProgress / clearRunProgress（P2 单实例内存注册表，终态清空）"
   deps: "RunnerDeps DI：fetchHistory / readFileContent（工作区作用域）/ interpret / rollingExecutor?（P1 并行执行器，缺省串行）"
   rolling-pool: "runJobsParallel(workerPath, jobs, concurrency)（P1，node:worker_threads 固定池）\ndefaultRollingConcurrency = min(availableParallelism,4,任务数)\ncreateParallelRollingExecutor → plan→并行 executeRollingJob→reassemble\nrolling-worker.ts 独立入口（tsup 第三入口）"
-  repos: "resultRepository/auditRepository.replaceForTask（同事务 DELETE+INSERT）\nllmArtifactRepository.save（ON CONFLICT(task_id)）"
-  routes: "POST /tasks/:id/run（running→409，失败回写 failed）\nGET /tasks/:id/results（task+results+audit+llm）"
+  repos: "resultRepository/auditRepository.replaceForTask（同事务 DELETE+INSERT）\nllmArtifactRepository.save（ON CONFLICT(task_id)）\ntaskRepository.recoverInterrupted（P2 启动清扫：重启中断的 running 置 failed）"
+  routes: "POST /tasks/:id/run（202 受理后台异步执行，运行中重复提交 409，P2）\nGET /tasks/:id/progress（{status, progress}，终态后 progress=null，P2）\nGET /tasks/:id/results（task+results+audit+llm）"
 
-  routes -> runner
+  routes -> runner: "executeInBackground（P2）"
+  runner -> run-progress: "onProgress 上报"
+  routes -> run-progress: "progress 端点读取 / 终态清空"
   runner -> repos: "产出持久化"
   runner -> deps
   deps -> rolling-pool: "生产组合根注入（P1）"
 }
 
 web-flow: "apps/web 核心工作流（T17-B）" {
-  home: "HomePage：五步向导 → taskConfigSchema.safeParse → createTask → runTask → /results/:id"
-  results: "ResultsPage：getTaskResults → 风险固定条(.risk-banner-breach) + 检验 Tab + LLM 并排(.llm-split) + 客户端导出"
+  home: "HomePage：五步向导 → taskConfigSchema.safeParse → createTask → runTask(202) → /results/:id（P2 启动即跳转）"
+  results: "ResultsPage：getTaskResults（运行中 2s 轮询）+ getTaskProgress（1s 轮询，进度条+当前步骤，X1）→ 风险固定条(.risk-banner-breach) + 检验 Tab + LLM 并排(.llm-split) + 客户端导出；失败页一键重试"
   history: "HistoryPage：listTasks + 重跑 mutation"
   api-client: "lib/api.ts：fetch credentials:'include'，出参一律 Zod 校验"
 

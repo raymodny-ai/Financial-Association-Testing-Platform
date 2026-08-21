@@ -8,6 +8,7 @@ import { rollingWindowTests } from '@platform/analysis-engine';
 import { describe, expect, it } from 'vitest';
 import type { HistoryPanel, PanelPoint } from './data-provider.js';
 import { runAnalysis, type RunnerDeps } from './analysis-runner.js';
+import { RUN_STEPS } from './run-progress.js';
 
 /** 确定性伪随机面板（工作日、无缺失） */
 function makePanel(ticker: string, seed: number): HistoryPanel {
@@ -374,5 +375,14 @@ describe('runAnalysis · 全链路（注入 fake 依赖）', () => {
     expect(captured).toEqual({ windowSize: 60, stepSize: 21 });
     const rolling = outcome.results.filter((r) => r.window_end !== null);
     expect(rolling.length).toBeGreaterThan(0);
+  });
+
+  it('P2 onProgress：编排 10 步按序上报（0..9，持久化步由路由层承担）', async () => {
+    const { deps } = fakeDeps();
+    const steps: number[] = [];
+    await runAnalysis(baseConfig, deps, (stepIndex) => steps.push(stepIndex));
+    expect(steps).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    // 步数与注册表标签表对齐（编排 10 步 + 路由持久化 1 步）
+    expect(RUN_STEPS.length).toBe(steps.length + 1);
   });
 });

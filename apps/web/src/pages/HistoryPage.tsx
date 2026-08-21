@@ -22,9 +22,10 @@ export default function HistoryPage() {
 
   const rerun = useMutation({
     mutationFn: (taskId: string) => runTask(taskId),
-    onSuccess: (_outcome, taskId) => {
+    onSuccess: (_accepted, taskId) => {
       void queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      message.success('重新运行完成');
+      // P2：202 受理即异步执行，进度在结果页轮询展示（X1）
+      message.info('重新运行已启动，正在跳转结果页跟踪进度');
       navigate(`/results/${taskId}`);
     },
     onError: (error: unknown) => {

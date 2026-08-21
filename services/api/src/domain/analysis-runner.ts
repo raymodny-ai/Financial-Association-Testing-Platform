@@ -148,11 +148,22 @@ function extractUploadSeries(
   return { points, adjusted };
 }
 
-/** 执行一次完整分析（不碰存储；持久化与状态机由路由层负责） */
-export async function runAnalysis(config: TaskConfig, deps: RunnerDeps): Promise<AnalysisOutcome> {
+/**
+ * 执行一次完整分析（不碰存储；持久化与状态机由路由层负责）。
+ * P2：onProgress 可选上报编排 10 步进度（0..9，持久化步由路由层承担）。
+ */
+export async function runAnalysis(
+  config: TaskConfig,
+  deps: RunnerDeps,
+  onProgress?: (stepIndex: number) => void,
+): Promise<AnalysisOutcome> {
   const runId = randomUUID();
+  const report = (stepIndex: number): void => {
+    if (onProgress !== undefined) onProgress(stepIndex);
+  };
 
   // 1. 数据加载（dualSource 第二源仅供双源审计对账，不进入分析面板；PRD 模块 J）
+  report(0);
   const rawSeries: NumericSeries[] = [];
   const auditPointsByAlias = new Map<string, AuditPoint[]>();
   const adjustedByAlias = new Map<string, Array<{ date: string; value: number }>>();
@@ -201,6 +212,7 @@ export async function runAnalysis(config: TaskConfig, deps: RunnerDeps): Promise
   }
 
   // 2. 标准化 + 离散化管道（S5：frequency 透传，周/月频先重采样再派生对齐）
+  report(1);
   const dataset = prepareDataset({
     series: rawSeries,
     derivedSeries: config.derivedSeries,
@@ -210,6 +222,7 @@ export async function runAnalysis(config: TaskConfig, deps: RunnerDeps): Promise
   });
 
   // 3. 分类变量路线：成对卡方独立性检验（检验期，参考期阈值复用）
+  report(2);
   const categoricalDrafts: DraftRow[] = pairwiseChiSquare(dataset).map((r) => {
     const warnings: string[] = [];
     if (r.notes) warnings.push(r.notes);
@@ -277,6 +290,7 @@ export async function runAnalysis(config: TaskConfig, deps: RunnerDeps): Promise
   });
 
   // 4. 连续变量路线：检验期数值对 × 注册表全部方法（退化抛错即跳过）
+  report(3);
   const [testStart, testEnd] = dataset.testIndex;
   const continuousDrafts: DraftRow[] = [];
   for (let i = 0; i < dataset.aliases.length; i += 1) {
@@ -306,6 +320,7 @@ export async function runAnalysis(config: TaskConfig, deps: RunnerDeps): Promise
   }
 
   // 5. 滞后分析（PRD 模块 H：检验期数值对 × [-maxLag, +maxLag] Pearson 扫描，单独成批校正）
+  report(4);
   const lagDrafts: DraftRow[] = [];
   if (config.maxLag > 0) {
     for (let i = 0; i < dataset.aliases.length; i += 1) {
@@ -336,6 +351,7 @@ export async function runAnalysis(config: TaskConfig, deps: RunnerDeps): Promise
   }
 
   // 6. 滚动窗口（按族统一校正前单独成批；P1：注入并行执行器时后台并行，缺省同线程串行）
+  report(5);
   let rollingDrafts: DraftRow[] = [];
   let rollingSkippedCount = 0;
   if (config.rolling.enabled) {
@@ -365,6 +381,7 @@ export async function runAnalysis(config: TaskConfig, deps: RunnerDeps): Promise
   }
 
   // 7. 多重检验校正：全样本按族分批、GOF/事件/滞后/滚动各自单独成批（与 alpha 比较标记显著）
+  report(6);
   const results = [
     ...finalize(categoricalDrafts, runId, config.tests.correction, config.tests.alpha),
     ...finalize(gofDrafts, runId, config.tests.correction, config.tests.alpha),
@@ -375,6 +392,7 @@ export async function runAnalysis(config: TaskConfig, deps: RunnerDeps): Promise
   ];
 
   // 8. 数据真实性审计（每个原始数据源；配置了 dualSource 的源附加双源一致性对账，PRD 模块 J）
+  report(7);
   const audit: AuditRow[] = [];
   const auditNotes: Record<string, string[]> = {};
   for (const [alias, points] of auditPointsByAlias) {
@@ -397,6 +415,7 @@ export async function runAnalysis(config: TaskConfig, deps: RunnerDeps): Promise
   }
 
   // 9. 导出面板快照（PRD 导出规范 01/04/05 底座；02 复权来自上传源 adj_close；03 收益率由前端派生）
+  report(8);
   const adjustedExport: ExportPanel['adjusted'] = {};
   for (const [alias, adjusted] of adjustedByAlias) {
     adjustedExport[alias] = adjusted;
@@ -422,6 +441,7 @@ export async function runAnalysis(config: TaskConfig, deps: RunnerDeps): Promise
   };
 
   // 10. LLM 上下文 + 推理（缺密钥降级 skipped，失败不阻塞统计结果）
+  report(9);
   const context = buildLlmContext({
     config,
     // G13：用户显式研究问题优先（缺省由引擎按 projectName 派生，关 N12）
