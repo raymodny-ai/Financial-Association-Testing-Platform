@@ -21,6 +21,9 @@ import {
   rollingWindowTests,
   type AuditPoint,
   type NumericSeries,
+  type PreparedDataset,
+  type RollingWindowOptions,
+  type RollingWindowReport,
 } from '@platform/analysis-engine';
 import type {
   AuditRow,
@@ -46,6 +49,14 @@ export interface RunnerDeps {
     model: string,
     runId: string,
   ): Promise<{ output: LlmOutput | null; trace: LlmTrace }>;
+  /**
+   * 滚动窗口执行器（P1）：注入 worker 线程池实现后台并行化；
+   * 缺省同线程串行（单测与轻量场景）。输出须与串行口径一致（确定性）。
+   */
+  rollingExecutor?: (
+    dataset: PreparedDataset,
+    options: RollingWindowOptions,
+  ) => Promise<RollingWindowReport> | RollingWindowReport;
 }
 
 export interface AnalysisOutcome {
@@ -324,17 +335,20 @@ export async function runAnalysis(config: TaskConfig, deps: RunnerDeps): Promise
     }
   }
 
-  // 6. 滚动窗口（按族统一校正前单独成批）
+  // 6. 滚动窗口（按族统一校正前单独成批；P1：注入并行执行器时后台并行，缺省同线程串行）
   let rollingDrafts: DraftRow[] = [];
   let rollingSkippedCount = 0;
   if (config.rolling.enabled) {
-    const report = rollingWindowTests(dataset, {
+    const rollingOptions = {
       windowSize: config.rolling.windowDays,
       stepSize: config.rolling.stepDays,
       // G5：前端可配置项透传（缺省交给引擎默认：仅完整窗口 / 全部四法）
       ...(config.rolling.minSamples !== undefined ? { minSamples: config.rolling.minSamples } : {}),
       ...(config.rolling.methods !== undefined ? { methods: config.rolling.methods } : {}),
-    });
+    };
+    const report = deps.rollingExecutor
+      ? await deps.rollingExecutor(dataset, rollingOptions)
+      : rollingWindowTests(dataset, rollingOptions);
     rollingSkippedCount = report.skipped.length;
     rollingDrafts = report.rows.map((r) => ({
       family: (r.testName === 'chi_square_independence' ? 'categorical' : 'continuous') as TestFamily,

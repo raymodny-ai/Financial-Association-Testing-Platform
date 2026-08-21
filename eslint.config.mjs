@@ -5,7 +5,7 @@ import tseslint from 'typescript-eslint';
 export default tseslint.config(
   {
     // 全局忽略：产物目录、依赖、技能资产与锁文件
-    ignores: ['**/dist/**', '**/node_modules/**', '**/coverage/**', '.qoder/**', 'pnpm-lock.yaml'],
+    ignores: ['**/dist/**', '**/node_modules/**', '**/coverage/**', '**/__fixtures__/**', '.qoder/**', 'pnpm-lock.yaml'],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,

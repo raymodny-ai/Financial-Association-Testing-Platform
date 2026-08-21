@@ -10,7 +10,7 @@ services: {
   api: "services/api\nExpress 5 网关" {
     presentation: "routes(tasks 含 run/results、files、templates 保存/列表/删除) + middleware(workspace/error-handler/security：helmet+限流+CORS+请求ID+UUID防护) + static(T20 同源托管 web 产物 + SPA 回退，WEB_DIST_DIR 可关)"
     domain: "DataProvider 契约 + provider-registry + analysis-runner 任务运行编排 + prompt-renderer + llm-service 编排"
-    infrastructure: "adapters(yahoo/stooq/csv-parse/llm-http) + repositories(task/file/result+panel/llm_artifacts/template) + migrate/db + llm-config/prompt-assets/llm-runner + logger(JSON 行结构化日志)"
+    infrastructure: "adapters(yahoo/stooq/csv-parse/llm-http) + repositories(task/file/result+panel/llm_artifacts/template) + migrate/db + llm-config/prompt-assets/llm-runner + logger(JSON 行结构化日志) + rolling-pool/rolling-worker(worker_threads 滚动并行池，P1)"
   }
   analysis-engine: "services/analysis-engine\n纯函数分析引擎" {
     transform: "派生变换 pct/log/diff"
@@ -27,7 +27,7 @@ services: {
     hsic: "hsicTest：核独立性检验（迹展开式 + 中位数带宽 + 播种置换），H2"
     continuous-registry: "可插拔注册表（pearson/spearman/mutual_information/hsic）"
     correction: "多重检验校正 bonferroni/bh/by + correctAndMark"
-    rolling: "planWindows 调度 + rollingWindowTests 默认四法滚动重算（hsic 可选扩展法，退化记 skipped）"
+    rolling: "planWindows 调度 + rollingWindowTests 默认四法滚动重算（hsic 可选扩展法，退化记 skipped；P1 三接缝 plan/execute/reassemble 任意并发度确定性一致）"
     lag: "lagScan：[-maxLag,+maxLag] 全整数滞后 Pearson 扫描（PRD 模块 H）"
     audit: "auditSeries 六类审计 + 双源对账 + pass/warn/fail 判定"
     llm-context: "buildLlmContext：TaskConfig+ResultTable+AuditTable → LlmContext 12 字段摘要 + 安全约束旗标"

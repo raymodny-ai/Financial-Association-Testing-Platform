@@ -95,6 +95,116 @@ export interface RollingWindowReport {
   skipped: string[];
 }
 
+/** 单个滚动任务描述（P1：纯数据、可结构化克隆，可跨 worker 传输） */
+export interface RollingJob {
+  /** 变量对（左/右别名，无自配对） */
+  pair: [string, string];
+  /** 窗口相对检验期起点的闭区间索引 */
+  relStart: number;
+  relEnd: number;
+  method: RollingMethod;
+}
+
+/** 单任务执行结果：成功行 或 退化说明（与串行口径一致） */
+export type RollingJobOutcome =
+  | { kind: 'row'; row: RollingWindowRow }
+  | { kind: 'skipped'; message: string };
+
+/** 校验方法列表并解析确定性参数（计划/执行两侧同口径） */
+function resolveRollingOptions(options: RollingWindowOptions): {
+  methods: readonly RollingMethod[];
+  mi: { bins: number; permutations: number; seed: number };
+  hsicOptions: { permutations: number; seed: number };
+} {
+  const methods = options.methods ?? ROLLING_METHODS;
+  for (const method of methods) {
+    if (!ALL_ROLLING_METHODS.includes(method)) {
+      throw new RangeError(`未知滚动窗口检验方法：${method}`);
+    }
+  }
+  return {
+    methods,
+    mi: options.mi ?? { bins: 3, permutations: 199, seed: 0 },
+    hsicOptions: options.hsic ?? { permutations: 99, seed: 0 },
+  };
+}
+
+/**
+ * P1 接缝：按「配对 × 窗口 × 方法」调度顺序枚举全部滚动任务（与串行循环同序）。
+ * 任务无状态、互不依赖，可按任意并发度执行；结果按任务索引重组保证确定性。
+ */
+export function planRollingJobs(dataset: PreparedDataset, options: RollingWindowOptions): RollingJob[] {
+  const { methods } = resolveRollingOptions(options);
+  const [testStart, testEnd] = dataset.testIndex;
+  const testLength = testEnd - testStart + 1;
+  const windows = planWindows(testLength, options);
+
+  const jobs: RollingJob[] = [];
+  for (let i = 0; i < dataset.aliases.length; i += 1) {
+    for (let j = i + 1; j < dataset.aliases.length; j += 1) {
+      const leftAlias = dataset.aliases[i]!;
+      const rightAlias = dataset.aliases[j]!;
+      for (const [relStart, relEnd] of windows) {
+        for (const method of methods) {
+          jobs.push({ pair: [leftAlias, rightAlias], relStart, relEnd, method });
+        }
+      }
+    }
+  }
+  return jobs;
+}
+
+/** P1 接缝：单任务执行（纯函数，退化返回 skipped 而非抛错） */
+export function executeRollingJob(
+  dataset: PreparedDataset,
+  options: RollingWindowOptions,
+  job: RollingJob,
+): RollingJobOutcome {
+  const { mi, hsicOptions } = resolveRollingOptions(options);
+  const [leftAlias, rightAlias] = job.pair;
+  const [testStart] = dataset.testIndex;
+  const start = testStart + job.relStart;
+  const end = testStart + job.relEnd;
+  const windowEndDate = dataset.dates[end]!;
+  try {
+    const computed = runWindowMethod(job.method, dataset, leftAlias, rightAlias, start, end, mi, hsicOptions);
+    return {
+      kind: 'row',
+      row: {
+        leftAlias,
+        rightAlias,
+        windowStart: start,
+        windowEnd: end,
+        windowEndDate,
+        testName: job.method,
+        ...computed,
+      },
+    };
+  } catch (error) {
+    if (error instanceof RangeError) {
+      return { kind: 'skipped', message: `窗口结束 ${windowEndDate} · ${leftAlias}×${rightAlias} · ${job.method}：${error.message}` };
+    }
+    throw error;
+  }
+}
+
+/** P1 接缝：按任务索引重组 → 无论并发度如何，输出与串行一致（确定性可复现） */
+export function reassembleRollingResults(
+  jobs: readonly RollingJob[],
+  outcomes: readonly RollingJobOutcome[],
+): RollingWindowReport {
+  if (jobs.length !== outcomes.length) {
+    throw new RangeError(`任务数（${jobs.length}）与结果数（${outcomes.length}）不一致，无法重组`);
+  }
+  const rows: RollingWindowRow[] = [];
+  const skipped: string[] = [];
+  for (const outcome of outcomes) {
+    if (outcome.kind === 'row') rows.push(outcome.row);
+    else skipped.push(outcome.message);
+  }
+  return { rows, skipped };
+}
+
 /** 单窗口单方法计算；退化抛 RangeError 由编排层捕获记入 skipped */
 function runWindowMethod(
   method: RollingMethod,
@@ -169,58 +279,11 @@ function runWindowMethod(
   };
 }
 
-/** 检验期内按配对 × 窗口 × 方法顺序滚动重算（无自配对、无重复对） */
+/** 检验期内按配对 × 窗口 × 方法顺序滚动重算（无自配对、无重复对；内部经 P1 任务接缝实现） */
 export function rollingWindowTests(
   dataset: PreparedDataset,
   options: RollingWindowOptions,
 ): RollingWindowReport {
-  const methods = options.methods ?? ROLLING_METHODS;
-  for (const method of methods) {
-    if (!ALL_ROLLING_METHODS.includes(method)) {
-      throw new RangeError(`未知滚动窗口检验方法：${method}`);
-    }
-  }
-  const mi = options.mi ?? { bins: 3, permutations: 199, seed: 0 };
-  const hsicOptions = options.hsic ?? { permutations: 99, seed: 0 };
-
-  const [testStart, testEnd] = dataset.testIndex;
-  const testLength = testEnd - testStart + 1;
-  const windows = planWindows(testLength, options);
-
-  const rows: RollingWindowRow[] = [];
-  const skipped: string[] = [];
-
-  for (let i = 0; i < dataset.aliases.length; i += 1) {
-    for (let j = i + 1; j < dataset.aliases.length; j += 1) {
-      const leftAlias = dataset.aliases[i]!;
-      const rightAlias = dataset.aliases[j]!;
-      for (const [relStart, relEnd] of windows) {
-        const start = testStart + relStart;
-        const end = testStart + relEnd;
-        const windowEndDate = dataset.dates[end]!;
-        for (const method of methods) {
-          try {
-            const computed = runWindowMethod(method, dataset, leftAlias, rightAlias, start, end, mi, hsicOptions);
-            rows.push({
-              leftAlias,
-              rightAlias,
-              windowStart: start,
-              windowEnd: end,
-              windowEndDate,
-              testName: method,
-              ...computed,
-            });
-          } catch (error) {
-            if (error instanceof RangeError) {
-              skipped.push(`窗口结束 ${windowEndDate} · ${leftAlias}×${rightAlias} · ${method}：${error.message}`);
-            } else {
-              throw error;
-            }
-          }
-        }
-      }
-    }
-  }
-
-  return { rows, skipped };
+  const jobs = planRollingJobs(dataset, options);
+  return reassembleRollingResults(jobs, jobs.map((job) => executeRollingJob(dataset, options, job)));
 }

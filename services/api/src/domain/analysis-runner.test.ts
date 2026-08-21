@@ -4,6 +4,7 @@
  * → 滚动窗口 → 审计 → buildLlmContext → LLM 推理（注入）。
  */
 import type { LlmContext, TaskConfig } from '@platform/schemas';
+import { rollingWindowTests } from '@platform/analysis-engine';
 import { describe, expect, it } from 'vitest';
 import type { HistoryPanel, PanelPoint } from './data-provider.js';
 import { runAnalysis, type RunnerDeps } from './analysis-runner.js';
@@ -359,5 +360,19 @@ describe('runAnalysis · 全链路（注入 fake 依赖）', () => {
     // 导出面板日期轴 = 周期末日（全年 ≤53 周，远小于日频 ~261 交易日）
     expect(outcome.panel.dates.length).toBeLessThan(70);
     expect(outcome.panel.dates.length).toBeGreaterThan(40);
+  });
+
+  it('P1 rollingExecutor 注入：并行执行器接管滚动环节，入参透传且输出同口径接入结果表', async () => {
+    let captured: { windowSize: number; stepSize: number } | null = null;
+    const { deps } = fakeDeps();
+    deps.rollingExecutor = (dataset, options) => {
+      captured = { windowSize: options.windowSize, stepSize: options.stepSize };
+      // 以引擎串行结果为「并行执行器输出」，验证接线而非实现（确定性口径由引擎接缝保证）
+      return rollingWindowTests(dataset, options);
+    };
+    const outcome = await runAnalysis(baseConfig, deps);
+    expect(captured).toEqual({ windowSize: 60, stepSize: 21 });
+    const rolling = outcome.results.filter((r) => r.window_end !== null);
+    expect(rolling.length).toBeGreaterThan(0);
   });
 });

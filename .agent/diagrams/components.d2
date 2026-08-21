@@ -26,7 +26,7 @@ analysis-engine: "services/analysis-engine/src" {
   hsic: "hsicStatistic(x,y) / hsicTest(x,y,{permutations,seed})\n→ {hsic, normalizedHsic, pValue, permutations, n}：高斯核中位数带宽 + 迹展开式，H2"
   continuous-registry: "register/get/listContinuousMethod\n内置 pearson/spearman/mutual_information/hsic"
   correction: "adjustPValues(pValues, method)\nbonferroni/bh/by/none，statsmodels 语义\ncorrectAndMark(pValues, method, alpha)\n→ {adjusted, significant}"
-  rolling: "planWindows(n, {windowSize, stepSize, minSamples})\nrollingWindowTests(dataset, options)\n→ {rows, skipped}：χ²/pearson/spearman/MI 默认四法 + hsic 可选扩展法滚动重算"
+  rolling: "planWindows(n, {windowSize, stepSize, minSamples})\nrollingWindowTests(dataset, options)\n→ {rows, skipped}：χ²/pearson/spearman/MI 默认四法 + hsic 可选扩展法滚动重算\nP1 接缝：planRollingJobs / executeRollingJob / reassembleRollingResults（任意并发度输出与串行一致）"
   audit: "auditSeries({alias, points, thresholds, adjustedPoints?, dualSource?})\n→ {row(auditRow 9字段), notes[], homogeneity|null}\n跳点=阈值主规则+MAD 兜底；双源=三分箱一致率+同质性 χ²"
   llm-context: "buildLlmContext({config, researchQuestion?, results, rollingSkippedCount?, audit, auditNotes?})\n→ LlmContext（llmContextSchema 校验）\n行分区：window_end 非空=滚动、lag>0=滞后、其余=全样本"
   types: "NumericSeries / AlignedPanel"
@@ -76,13 +76,15 @@ api-data-flow: "services/api 数据链路" {
 
 api-analysis-flow: "services/api 任务运行编排（T17-A）" {
   runner: "runAnalysis(config, deps) → AnalysisOutcome{runId, results, audit, llm}\n数据加载 → prepareDataset → 卡方族+注册表连续法（四法含 hsic） → 校正分批 → 滚动 → 每源审计 → buildLlmContext → interpret"
-  deps: "RunnerDeps DI：fetchHistory / readFileContent（工作区作用域）/ interpret"
+  deps: "RunnerDeps DI：fetchHistory / readFileContent（工作区作用域）/ interpret / rollingExecutor?（P1 并行执行器，缺省串行）"
+  rolling-pool: "runJobsParallel(workerPath, jobs, concurrency)（P1，node:worker_threads 固定池）\ndefaultRollingConcurrency = min(availableParallelism,4,任务数)\ncreateParallelRollingExecutor → plan→并行 executeRollingJob→reassemble\nrolling-worker.ts 独立入口（tsup 第三入口）"
   repos: "resultRepository/auditRepository.replaceForTask（同事务 DELETE+INSERT）\nllmArtifactRepository.save（ON CONFLICT(task_id)）"
   routes: "POST /tasks/:id/run（running→409，失败回写 failed）\nGET /tasks/:id/results（task+results+audit+llm）"
 
   routes -> runner
   runner -> repos: "产出持久化"
   runner -> deps
+  deps -> rolling-pool: "生产组合根注入（P1）"
 }
 
 web-flow: "apps/web 核心工作流（T17-B）" {
@@ -97,3 +99,4 @@ web-flow: "apps/web 核心工作流（T17-B）" {
 }
 
 web-flow.api-client -> api-data-flow.tasks: "HTTP /api（开发经 Vite 代理 :8787）"
+api-analysis-flow.rolling-pool -> analysis-engine.rolling: "worker 内执行 executeRollingJob（结构化克隆纯数据）"

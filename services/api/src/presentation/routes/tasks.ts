@@ -19,6 +19,7 @@ import { assertUuidParam } from '../middleware/security.js';
 import { runAnalysis, type RunnerDeps } from '../../domain/analysis-runner.js';
 import { getProvider } from '../../domain/provider-registry.js';
 import { interpretContext } from '../../infrastructure/llm-runner.js';
+import { createParallelRollingExecutor } from '../../infrastructure/rolling-pool.js';
 import { fileRepository } from '../../infrastructure/repositories/file-repository.js';
 import {
   auditRepository,
@@ -78,7 +79,7 @@ tasksRouter.get('/:id', async (req, res) => {
   res.json(toRecord(row));
 });
 
-/** 装配真实依赖（G5：文件读取同样以工作区作用域约束） */
+/** 装配真实依赖（G5：文件读取同样以工作区作用域约束；P1：滚动窗口经 worker 线程池后台并行） */
 function makeRunnerDeps(workspaceId: string): RunnerDeps {
   return {
     async fetchHistory(providerName, ticker, query) {
@@ -92,6 +93,7 @@ function makeRunnerDeps(workspaceId: string): RunnerDeps {
       return file.content;
     },
     interpret: (context, model, runId) => interpretContext(context, model, runId),
+    rollingExecutor: createParallelRollingExecutor(),
   };
 }
 
