@@ -1,6 +1,9 @@
 /**
  * 极简 SQL 迁移运行器：按文件名顺序执行 infra/db/migrations/*.sql，
  * 以 schema_migrations 表记录已应用迁移，单条迁移事务内执行。
+ * 并发安全（CI 修复）：会话级 advisory lock 串行化并发 runMigrations
+ *（vitest 多测试文件在全新库上并发首跑曾竞态撞 schema_migrations_pkey），
+ * 记账 INSERT 附 ON CONFLICT DO NOTHING 双保险。
  *
  * CLI：pnpm --filter @platform/api db:migrate
  * 测试：import { runMigrations } 后直接调用。
@@ -28,43 +31,55 @@ function findMigrationsDir(): string {
 
 const MIGRATIONS_DIR = findMigrationsDir();
 
+/** advisory lock 键：hashtext('schema_migrations') 固定值，仅用于串行化迁移 */
+const MIGRATION_LOCK_KEY = 20260820;
+
 export async function runMigrations(db: pg.Pool): Promise<string[]> {
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS schema_migrations (
-      name TEXT PRIMARY KEY,
-      applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    )
-  `);
+  const guard = await db.connect();
+  try {
+    // 会话级锁：并发调用在此排队，锁随 release 前显式释放
+    await guard.query('SELECT pg_advisory_lock($1)', [MIGRATION_LOCK_KEY]);
 
-  const applied = new Set<string>(
-    (await db.query<{ name: string }>('SELECT name FROM schema_migrations')).rows.map(
-      (r) => r.name,
-    ),
-  );
+    await guard.query(`
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        name TEXT PRIMARY KEY,
+        applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `);
 
-  const files = (await readdir(MIGRATIONS_DIR))
-    .filter((f) => f.endsWith('.sql'))
-    .sort();
+    const applied = new Set<string>(
+      (await guard.query<{ name: string }>('SELECT name FROM schema_migrations')).rows.map(
+        (r) => r.name,
+      ),
+    );
 
-  const newlyApplied: string[] = [];
-  for (const file of files) {
-    if (applied.has(file)) continue;
-    const sql = await readFile(join(MIGRATIONS_DIR, file), 'utf-8');
-    const client = await db.connect();
-    try {
-      await client.query('BEGIN');
-      await client.query(sql);
-      await client.query('INSERT INTO schema_migrations (name) VALUES ($1)', [file]);
-      await client.query('COMMIT');
-      newlyApplied.push(file);
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
+    const files = (await readdir(MIGRATIONS_DIR))
+      .filter((f) => f.endsWith('.sql'))
+      .sort();
+
+    const newlyApplied: string[] = [];
+    for (const file of files) {
+      if (applied.has(file)) continue;
+      const sql = await readFile(join(MIGRATIONS_DIR, file), 'utf-8');
+      try {
+        await guard.query('BEGIN');
+        await guard.query(sql);
+        await guard.query(
+          'INSERT INTO schema_migrations (name) VALUES ($1) ON CONFLICT DO NOTHING',
+          [file],
+        );
+        await guard.query('COMMIT');
+        newlyApplied.push(file);
+      } catch (error) {
+        await guard.query('ROLLBACK');
+        throw error;
+      }
     }
+    return newlyApplied;
+  } finally {
+    await guard.query('SELECT pg_advisory_unlock($1)', [MIGRATION_LOCK_KEY]).catch(() => {});
+    guard.release();
   }
-  return newlyApplied;
 }
 
 const isMain =
